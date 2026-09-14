@@ -487,6 +487,76 @@ fun SoftSwitchRow(
 
 // ----------------------------------------------------------- Sheet shell ----
 
+/** Shared mission telemetry header: brand pill left, status capsule right. */
+@Composable
+fun SoftMissionHeader(
+    mode: String,
+    statusText: String,
+    statusActive: Boolean,
+    modifier: Modifier = Modifier,
+    activeColor: Color = MinimalColorsInstance.mesh
+) {
+    val colors = MinimalColorsInstance
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Brand & mode pill
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.surface)
+                .border(1.dp, colors.outline, RoundedCornerShape(14.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SoftStatusDot(color = colors.accent, dotSize = 7.dp)
+            Text(
+                text = "iTantra",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textPrimary
+            )
+            Box(
+                Modifier
+                    .size(width = 1.dp, height = 12.dp)
+                    .background(colors.outline)
+            )
+            Text(
+                text = mode,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textSecondary
+            )
+        }
+
+        // Status capsule
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (statusActive) activeColor.copy(alpha = 0.14f) else colors.surface)
+                .border(
+                    1.dp,
+                    if (statusActive) activeColor.copy(alpha = 0.35f) else colors.outline,
+                    RoundedCornerShape(14.dp)
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            SoftStatusDot(color = if (statusActive) activeColor else colors.textTertiary, dotSize = 7.dp)
+            Text(
+                text = statusText,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (statusActive) activeColor else colors.textSecondary
+            )
+        }
+    }
+}
+
 /** Shared language-picker / selector bottom sheet shell. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable

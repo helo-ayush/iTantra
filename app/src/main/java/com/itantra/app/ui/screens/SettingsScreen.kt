@@ -1,10 +1,8 @@
 package com.itantra.app.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,28 +21,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,33 +44,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itantra.app.R
 import com.itantra.app.modelhub.LanguageModelPack
 import com.itantra.app.modelhub.ModelDownloadState
-import com.itantra.app.ui.theme.AccentBlue
-import com.itantra.app.ui.theme.AccentBlueContainer
-import com.itantra.app.ui.theme.BadgeMintContainer
-import com.itantra.app.ui.theme.BadgeMintText
-import com.itantra.app.ui.theme.MeshGreen
-import com.itantra.app.ui.theme.MeshGreenText
+import com.itantra.app.ui.components.soft.SoftBadge
+import com.itantra.app.ui.components.soft.SoftIcon
 import com.itantra.app.ui.theme.MinimalColorsInstance
-import com.itantra.app.ui.theme.SosRed
-import com.itantra.app.ui.theme.SosRedContainer
-import com.itantra.app.ui.theme.SosRedDark
 import com.itantra.app.ui.theme.minimalColors
 import com.itantra.app.viewmodel.MissionControlViewModel
 
 /**
- * World-Class Tactical Settings Screen:
- * 1. Device Callsign & Identity Card
- * 2. Appearance: 3-Way Theme Switcher (Light Air • Dark Stealth • System Auto)
- * 3. On-Device AI Neural Models Management (List, Storage Bar, Deletion with Confirmation Dialog)
- * 4. Radio & Disaster Mesh Tuning (TX Power, Beacon Frequency, Hop Limit)
- * 5. Voice & Audio Tuning (VAD Sensitivity, Noise Suppression, SOS Override)
- * 6. Tactical Privacy, Map Cache & Sensor Health Diagnostics
+ * Settings:
+ * 1. Device callsign & identity
+ * 2. Appearance (light · dark · system) + keep screen awake
+ * 3. On-device AI model packs + neural translation
+ * 4. Mesh & radio tuning
+ * 5. Voice & audio tuning
+ * 6. Privacy, map cache & sensor health
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -134,7 +103,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(colors.background)
             .verticalScroll(scrollState)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ==========================================
@@ -143,9 +112,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Row(
@@ -156,54 +125,46 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(colors.badgeBlueContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Badge,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_id,
                             contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(22.dp)
+                            tint = colors.badgeBlueText,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "RADIO CALLSIGN & NODE",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
+                            text = "Radio callsign & node",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.2.sp,
                             color = colors.textSecondary
                         )
                         Text(
                             text = callsign,
                             fontSize = 17.sp,
-                            fontWeight = FontWeight.Black,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "MAC: 00:1B:44:11:3A:B7 • Full-Duplex",
+                            text = "MAC: 00:1B:44:11:3A:B7 · Full-duplex",
                             fontSize = 11.sp,
-                            color = colors.textSecondary
+                            color = colors.textTertiary
                         )
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.badgeMintContainer)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "Transceiver",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.badgeMintText
-                    )
-                }
+                SoftBadge(
+                    text = "Transceiver",
+                    containerColor = colors.badgeMintContainer,
+                    contentColor = colors.badgeMintText
+                )
             }
         }
 
@@ -213,9 +174,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -223,18 +184,17 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.DarkMode,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_moon,
                         contentDescription = null,
                         tint = colors.accent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Text(
-                        text = "APPEARANCE & THEME",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "Appearance",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
                 }
 
@@ -244,8 +204,8 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ThemeOptionButton(
-                        title = "Light Air",
-                        icon = Icons.Default.LightMode,
+                        title = "Light",
+                        iconRes = R.drawable.ic_soft_sun,
                         isSelected = uiState.themeMode == "light",
                         onClick = { viewModel.setThemeMode("light") },
                         modifier = Modifier.weight(1f),
@@ -253,8 +213,8 @@ fun SettingsScreen(
                     )
 
                     ThemeOptionButton(
-                        title = "Dark Stealth",
-                        icon = Icons.Default.DarkMode,
+                        title = "Dark",
+                        iconRes = R.drawable.ic_soft_moon,
                         isSelected = uiState.themeMode == "dark",
                         onClick = { viewModel.setThemeMode("dark") },
                         modifier = Modifier.weight(1f),
@@ -262,8 +222,8 @@ fun SettingsScreen(
                     )
 
                     ThemeOptionButton(
-                        title = "System Auto",
-                        icon = Icons.Default.AutoAwesome,
+                        title = "System",
+                        iconRes = R.drawable.ic_soft_sparkle,
                         isSelected = uiState.themeMode == "system",
                         onClick = { viewModel.setThemeMode("system") },
                         modifier = Modifier.weight(1f),
@@ -281,14 +241,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Keep Screen Awake during Mission",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Keep screen awake during missions",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Prevents device standby while SOS or Walkie is active",
-                            fontSize = 11.sp,
+                            text = "Prevents standby while SOS or Walkie is active",
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
@@ -310,9 +270,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -328,25 +288,25 @@ fun SettingsScreen(
                             .background(colors.badgePurpleContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Psychology,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_cpu,
                             contentDescription = null,
                             tint = colors.badgePurpleText,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "ON-DEVICE AI MODELS",
+                            text = "On-device AI models",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "100% Offline • Download packs on demand",
-                            fontSize = 11.sp,
-                            color = colors.badgeMintText
+                            text = "100% offline · Download packs on demand",
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
                         )
                     }
                 }
@@ -355,7 +315,7 @@ fun SettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(colors.cardSecondaryBg)
                         .padding(12.dp)
                 ) {
@@ -366,29 +326,28 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Storage,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_database,
                                     contentDescription = null,
                                     tint = colors.textSecondary,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Model Storage:",
+                                    text = "Model storage: ",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = colors.textSecondary
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "${formatSizeMb(installedStorageMb)} MB",
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                             }
                             Text(
-                                text = "${installedPacks.size} Engines Installed",
+                                text = "${installedPacks.size} installed",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.badgeMintText
@@ -433,9 +392,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -448,63 +407,55 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(AccentBlueContainer),
+                            .background(colors.accentContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Translate,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_globe,
                             contentDescription = null,
-                            tint = AccentBlue,
-                            modifier = Modifier.size(20.dp)
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "NEURAL TRANSLATION ENGINES",
+                            text = "Neural translation",
                             fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Text(
                             text = "Cross-lingual mesh (Hindi ⟷ English)",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
                     // Status Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isTranslationInstalled) BadgeMintContainer
-                                else if (translationDownloadState is ModelDownloadState.Downloading) AccentBlueContainer
-                                else colors.cardSecondaryBg
-                            )
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = when {
-                                isTranslationInstalled -> "✓ INSTALLED"
-                                translationDownloadState is ModelDownloadState.Downloading -> "DOWNLOADING"
-                                else -> "NOT DOWNLOADED"
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = when {
-                                isTranslationInstalled -> BadgeMintText
-                                translationDownloadState is ModelDownloadState.Downloading -> AccentBlue
-                                else -> colors.textSecondary
-                            }
-                        )
-                    }
+                    SoftBadge(
+                        text = when {
+                            isTranslationInstalled -> "Installed"
+                            translationDownloadState is ModelDownloadState.Downloading -> "Downloading"
+                            else -> "Not downloaded"
+                        },
+                        containerColor = when {
+                            isTranslationInstalled -> colors.badgeMintContainer
+                            translationDownloadState is ModelDownloadState.Downloading -> colors.accentContainer
+                            else -> colors.cardSecondaryBg
+                        },
+                        contentColor = when {
+                            isTranslationInstalled -> colors.badgeMintText
+                            translationDownloadState is ModelDownloadState.Downloading -> colors.accent
+                            else -> colors.textSecondary
+                        }
+                    )
                 }
 
                 // Description Box
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(colors.cardSecondaryBg)
                         .padding(12.dp)
                 ) {
@@ -521,17 +472,17 @@ fun SettingsScreen(
                                 color = colors.textPrimary
                             )
                             Text(
-                                text = "Google On-Device",
+                                text = "On-device",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textSecondary
                             )
                         }
                         Text(
-                            text = "Powered by Google ML Kit On-Device Neural Machine Translation. Translates full sentences offline between Hindi and English. If neither device has this pack installed, cross-lingual voice turns will pause with a prompt.",
-                            fontSize = 11.sp,
+                            text = "Powered by Google ML Kit on-device neural machine translation. Translates full sentences offline between Hindi and English. If neither device has this pack installed, cross-lingual voice turns will pause with a prompt.",
+                            fontSize = 12.sp,
                             color = colors.textSecondary,
-                            lineHeight = 15.sp
+                            lineHeight = 16.sp
                         )
 
                         // Download Progress bar if active
@@ -552,15 +503,15 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Downloading offline neural weights...",
+                                    text = "Downloading offline neural weights…",
                                     fontSize = 10.sp,
-                                    color = AccentBlue
+                                    color = colors.accent
                                 )
                                 Text(
                                     text = "${(state.progress * 100).toInt()}%",
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AccentBlue
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.accent
                                 )
                             }
                         }
@@ -577,47 +528,48 @@ fun SettingsScreen(
                         OutlinedButton(
                             onClick = { viewModel.deleteTranslationModel() },
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = SosRed
+                                contentColor = colors.error
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, SosRed.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, colors.error.copy(alpha = 0.4f)),
+                            shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_trash,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = SosRed
+                                tint = colors.error,
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Remove Model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Remove model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     } else if (translationDownloadState is ModelDownloadState.Downloading) {
                         Button(
                             onClick = { },
                             enabled = false,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Text("Downloading...", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Downloading…", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     } else {
                         Button(
                             onClick = { viewModel.downloadTranslationModel() },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colors.accent,
-                                contentColor = Color.White
+                                contentColor = colors.onAccent
                             ),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(12.dp),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Translate,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_download,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                tint = colors.onAccent,
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Download Model (Google ML Kit)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Download translation model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -625,31 +577,30 @@ fun SettingsScreen(
                 HorizontalDivider(color = colors.outline, thickness = 1.dp)
 
                 // -------------------------------------------------------------
-                // TEST SANDBOX: Instant offline verification for judges & demo
+                // TEST SANDBOX: Instant offline verification
                 // -------------------------------------------------------------
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_sparkle,
                             contentDescription = null,
                             tint = colors.accent,
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "OFFLINE TRANSLATION TEST SANDBOX",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                            color = colors.textSecondary
+                            text = "Offline translation test",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
                         )
                     }
 
                     Text(
-                        text = "Tap any emergency phrase to test 100% offline bidirectional translation:",
-                        fontSize = 11.sp,
+                        text = "Tap any emergency phrase to test fully offline bidirectional translation:",
+                        fontSize = 12.sp,
                         color = colors.textSecondary
                     )
 
@@ -669,9 +620,9 @@ fun SettingsScreen(
                         ).forEach { sample ->
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(colors.cardSecondaryBg)
-                                    .border(1.dp, colors.outline, RoundedCornerShape(8.dp))
+                                    .border(1.dp, colors.outline, RoundedCornerShape(10.dp))
                                     .clickable {
                                         testTranslationInput = sample
                                         val isHindi = sample.any { it.code in 0x0900..0x097F }
@@ -697,9 +648,9 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(colors.cardSecondaryBg)
-                                .border(1.dp, colors.accent.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .border(1.dp, colors.accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .padding(10.dp)
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -712,15 +663,15 @@ fun SettingsScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "$fromTag ➔ $toTag",
+                                        text = "$fromTag → $toTag",
                                         fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = colors.accent
                                     )
                                     Text(
                                         text = "Google ML Kit Neural NMT",
                                         fontSize = 10.sp,
-                                        color = BadgeMintText
+                                        color = colors.badgeMintText
                                     )
                                 }
                                 Text(
@@ -731,8 +682,8 @@ fun SettingsScreen(
                                 Text(
                                     text = "Output: \"${if (testTranslationOutput.isNotBlank()) testTranslationOutput else viewModel.translateEmergencyText(testTranslationInput, if (isInputHindi) "hi" else "en", if (isInputHindi) "en" else "hi")}\"",
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BadgeMintText
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.badgeMintText
                                 )
                             }
                         }
@@ -742,14 +693,14 @@ fun SettingsScreen(
         }
 
         // ==========================================
-        // 4. DISASTER MESH & RADIO TUNING (DUMMY OPTIONS)
+        // 4. DISASTER MESH & RADIO TUNING
         // ==========================================
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -757,18 +708,17 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Radio,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_radio,
                         contentDescription = null,
                         tint = colors.accent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Text(
-                        text = "DISASTER MESH & RADIO TUNING",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "Mesh & radio tuning",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
                 }
 
@@ -779,15 +729,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Radio TX Power & Range",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Radio TX power & range",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
                             text = txPower,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                     }
@@ -816,15 +766,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Beacon Broadcast Frequency",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Beacon broadcast frequency",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
                             text = "Every ${beaconInterval}s",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                     }
@@ -853,15 +803,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Mesh Relay Multi-Hop Limit",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Mesh relay multi-hop limit",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "$meshHopLimit Hops",
+                            text = "$meshHopLimit hops",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                     }
@@ -891,9 +841,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -901,18 +851,17 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.GraphicEq,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_eq,
                         contentDescription = null,
                         tint = colors.accent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Text(
-                        text = "VOICE & SENSOR AUDIO",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "Voice & audio",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
                 }
 
@@ -923,15 +872,15 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Hands-Free VAD Sensitivity",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Hands-free VAD sensitivity",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
                             text = vadSensitivity,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                     }
@@ -961,14 +910,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "AI Noise Suppression Filter",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "AI noise suppression filter",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Filters heavy wind, rain, and rubble acoustic noise",
-                            fontSize = 11.sp,
+                            text = "Filters heavy wind, rain, and rubble noise",
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
@@ -990,14 +939,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Force Max Volume on SOS",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Max volume on SOS",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Overrides device silent mode during emergency intercom",
-                            fontSize = 11.sp,
+                            text = "Overrides silent mode during emergency intercom",
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
@@ -1019,14 +968,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Battery Saver Duty-Cycling",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Battery saver duty-cycling",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Paces BLE radio scanning when stationary to extend battery",
-                            fontSize = 11.sp,
+                            text = "Paces BLE scanning when stationary to save battery",
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
@@ -1048,9 +997,9 @@ fun SettingsScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1058,18 +1007,17 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_lock,
                         contentDescription = null,
                         tint = colors.accent,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                     Text(
-                        text = "TACTICAL PRIVACY & SENSORS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "Privacy & sensors",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
                 }
 
@@ -1081,14 +1029,14 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Zero-Log Tactical Privacy",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Zero-log privacy",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
                             text = "Keeps voice and message buffers in volatile RAM only",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
@@ -1110,30 +1058,31 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Offline Radar Map Cache",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text = "Offline radar map cache",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = if (mapCacheSizeMb > 0) "$mapCacheSizeMb MB cached pre-disaster tiles" else "Cache cleared",
-                            fontSize = 11.sp,
+                            text = if (mapCacheSizeMb > 0) "$mapCacheSizeMb MB cached tiles" else "Cache cleared",
+                            fontSize = 12.sp,
                             color = colors.textSecondary
                         )
                     }
                     OutlinedButton(
                         onClick = { viewModel.clearMapCache() },
                         enabled = mapCacheSizeMb > 0,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(12.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CleaningServices,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_eraser,
                             contentDescription = null,
+                            tint = colors.textPrimary,
                             modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Clear", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("Clear", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -1142,8 +1091,8 @@ fun SettingsScreen(
                 // Hardware Sensor Diagnostics
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Hardware Sensor Health",
-                        fontSize = 12.sp,
+                        text = "Hardware sensor health",
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary
                     )
@@ -1164,25 +1113,25 @@ fun SettingsScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.errorContainer)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.sosContainer)
                         .clickable { showWipeConfirmDialog = true }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.WarningAmber,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_warning,
                             contentDescription = null,
-                            tint = colors.error,
+                            tint = colors.sosContainerText,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Emergency Local Data Wipe",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.error
+                            text = "Emergency data wipe",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.sosContainerText
                         )
                     }
                 }
@@ -1198,15 +1147,15 @@ fun SettingsScreen(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "iTantra Tactical Mesh • Version 2.4.0",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = "iTantra mesh · Version 2.4.0",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
                     color = colors.textSecondary
                 )
                 Text(
-                    text = "Zero-Cloud Sovereign Neural Architecture",
-                    fontSize = 10.sp,
-                    color = colors.textSecondary.copy(alpha = 0.7f)
+                    text = "Zero cloud · Everything stays on your device",
+                    fontSize = 11.sp,
+                    color = colors.textTertiary
                 )
             }
         }
@@ -1226,34 +1175,34 @@ fun SettingsScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(colors.errorContainer),
+                        .background(colors.sosContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_trash,
                         contentDescription = null,
-                        tint = colors.error,
-                        modifier = Modifier.size(24.dp)
+                        tint = colors.sosContainerText,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             },
             title = {
                 Text(
-                    text = "Delete Language Pack?",
+                    text = "Delete language pack?",
                     fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
                 )
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Are you sure you want to remove \"${target.name}\" (${target.languageTag}) from offline storage?",
+                        text = "Remove \"${target.name}\" (${target.languageTag}) from offline storage?",
                         fontSize = 13.sp,
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "This will immediately free up ${formatSizeMb(target.sizeMb)} MB. Offline speech for ${target.name} will be disabled until re-downloaded.",
+                        text = "This frees up ${formatSizeMb(target.sizeMb)} MB. Offline speech for ${target.name} will be unavailable until re-downloaded.",
                         fontSize = 12.sp,
                         color = colors.textSecondary
                     )
@@ -1265,10 +1214,10 @@ fun SettingsScreen(
                         viewModel.deleteModel(target.languageTag)
                         modelToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.error),
-                    shape = RoundedCornerShape(10.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.error, contentColor = colors.onError),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Delete Model", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -1279,10 +1228,10 @@ fun SettingsScreen(
                 }
             },
             modifier = Modifier
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp)),
-            containerColor = if (colors.isDark) Color(0xFF131A29) else Color.White,
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp)),
+            containerColor = colors.surface,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(22.dp)
         )
     }
 
@@ -1293,24 +1242,24 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showWipeConfirmDialog = false },
             icon = {
-                Icon(
-                    imageVector = Icons.Default.WarningAmber,
+                SoftIcon(
+                    resId = R.drawable.ic_soft_warning,
                     contentDescription = null,
                     tint = colors.error,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             },
             title = {
                 Text(
-                    text = "Confirm Tactical Wipe?",
+                    text = "Wipe local data?",
                     fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
                 )
             },
             text = {
                 Text(
-                    text = "This will immediately clear all local message history, cached map tiles, and restore default tactical identity parameters.",
+                    text = "This immediately clears all local message history and cached map tiles, and restores default identity parameters.",
                     fontSize = 13.sp,
                     color = colors.textSecondary
                 )
@@ -1321,10 +1270,10 @@ fun SettingsScreen(
                         viewModel.emergencyWipe()
                         showWipeConfirmDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.error),
-                    shape = RoundedCornerShape(10.dp)
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.error, contentColor = colors.onError),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Wipe Local Data", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Wipe data", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -1335,10 +1284,10 @@ fun SettingsScreen(
                 }
             },
             modifier = Modifier
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp)),
-            containerColor = if (colors.isDark) Color(0xFF131A29) else Color.White,
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp)),
+            containerColor = colors.surface,
             tonalElevation = 0.dp,
-            shape = RoundedCornerShape(20.dp)
+            shape = RoundedCornerShape(22.dp)
         )
     }
 }
@@ -1349,7 +1298,7 @@ fun SettingsScreen(
 @Composable
 private fun ThemeOptionButton(
     title: String,
-    icon: ImageVector,
+    iconRes: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1357,12 +1306,12 @@ private fun ThemeOptionButton(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) colors.badgeBlueContainer else colors.cardSecondaryBg)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isSelected) colors.accentContainer else colors.cardSecondaryBg)
             .border(
-                width = 1.2.dp,
-                color = if (isSelected) colors.accent else Color.Transparent,
-                shape = RoundedCornerShape(12.dp)
+                width = 1.dp,
+                color = if (isSelected) colors.accent.copy(alpha = 0.55f) else Color.Transparent,
+                shape = RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 6.dp),
@@ -1372,8 +1321,8 @@ private fun ThemeOptionButton(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
-                imageVector = icon,
+            SoftIcon(
+                resId = iconRes,
                 contentDescription = title,
                 tint = if (isSelected) colors.accent else colors.textSecondary,
                 modifier = Modifier.size(18.dp)
@@ -1381,15 +1330,15 @@ private fun ThemeOptionButton(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = if (isSelected) colors.accent else colors.textSecondary
             )
         }
     }
 }
 
-/** Tactical on-device model storage quota (MB) used for the storage bar. */
+/** On-device model storage quota (MB) used for the storage bar. */
 private const val MODEL_STORAGE_QUOTA_MB = 2048.0
 
 private fun formatSizeMb(sizeMb: Double): String =
@@ -1414,9 +1363,9 @@ private fun LanguagePackRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(colors.cardSecondaryBg)
-            .border(0.5.dp, colors.outline, RoundedCornerShape(14.dp))
+            .border(0.5.dp, colors.outline, RoundedCornerShape(16.dp))
             .padding(12.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1431,26 +1380,18 @@ private fun LanguagePackRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         // Script badge
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.badgeBlueContainer)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = pack.script,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.badgeBlueText
-                            )
-                        }
+                        SoftBadge(
+                            text = pack.script,
+                            containerColor = colors.badgeBlueContainer,
+                            contentColor = colors.badgeBlueText
+                        )
 
                         // Language tag
                         Text(
                             text = pack.languageTag.uppercase(),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
-                            color = colors.textSecondary
+                            color = colors.textTertiary
                         )
                     }
 
@@ -1459,12 +1400,12 @@ private fun LanguagePackRow(
                     Text(
                         text = pack.name,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary
                     )
 
                     Text(
-                        text = "STT + TTS engine • ${formatSizeMb(pack.sizeMb)} MB",
+                        text = "STT + TTS engine · ${formatSizeMb(pack.sizeMb)} MB",
                         fontSize = 11.sp,
                         color = colors.textSecondary
                     )
@@ -1475,18 +1416,18 @@ private fun LanguagePackRow(
                         Text(
                             text = "Installed",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.badgeMintText
                         )
                         IconButton(
                             onClick = onDeleteClick,
                             modifier = Modifier.size(36.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_trash,
                                 contentDescription = "Delete ${pack.name}",
                                 tint = colors.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }
@@ -1495,48 +1436,48 @@ private fun LanguagePackRow(
                         Text(
                             text = "${(state.progress * 100).toInt()}%",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                         IconButton(onClick = onPauseDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Pause,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_pause,
                                 contentDescription = "Pause ${pack.name}",
                                 tint = colors.textSecondary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         IconButton(onClick = onCancelDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_close,
                                 contentDescription = "Cancel ${pack.name}",
                                 tint = colors.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
                     state is ModelDownloadState.Paused -> Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Paused • ${(state.progress * 100).toInt()}%",
+                            text = "Paused · ${(state.progress * 100).toInt()}%",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.badgePurpleText
                         )
                         IconButton(onClick = onResumeDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_play,
                                 contentDescription = "Resume ${pack.name}",
                                 tint = colors.accent,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         IconButton(onClick = onCancelDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_close,
                                 contentDescription = "Cancel ${pack.name}",
                                 tint = colors.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -1545,15 +1486,15 @@ private fun LanguagePackRow(
                         Text(
                             text = "Verifying",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                         IconButton(onClick = onCancelDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_close,
                                 contentDescription = "Cancel ${pack.name}",
                                 tint = colors.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -1562,35 +1503,35 @@ private fun LanguagePackRow(
                         Text(
                             text = "Extracting",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                         IconButton(onClick = onCancelDownload, modifier = Modifier.size(32.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_close,
                                 contentDescription = "Cancel ${pack.name}",
                                 tint = colors.error,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
 
                     state is ModelDownloadState.Error -> Button(
                         onClick = onDownload,
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.error),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.error, contentColor = colors.onError),
+                        shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
-                        Text("Retry", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Retry", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
 
                     else -> Button(
                         onClick = onDownload,
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+                        shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
-                        Text("Download", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Download", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -1607,7 +1548,7 @@ private fun LanguagePackRow(
                         trackColor = colors.outline
                     )
                     Text(
-                        text = "Downloading • ${formatSizeMb(state.progressBytes / (1024.0 * 1024.0))} / ${formatSizeMb(state.totalBytes / (1024.0 * 1024.0))} MB",
+                        text = "Downloading · ${formatSizeMb(state.progressBytes / (1024.0 * 1024.0))} / ${formatSizeMb(state.totalBytes / (1024.0 * 1024.0))} MB",
                         fontSize = 10.sp,
                         color = colors.textSecondary
                     )
@@ -1623,7 +1564,7 @@ private fun LanguagePackRow(
                         trackColor = colors.outline
                     )
                     Text(
-                        text = "Paused • ${(state.progress * 100).toInt()}%",
+                        text = "Paused · ${(state.progress * 100).toInt()}%",
                         fontSize = 10.sp,
                         color = colors.textSecondary
                     )
@@ -1654,12 +1595,12 @@ private fun SegmentedOptionChip(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) colors.badgeBlueContainer else colors.cardSecondaryBg)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isSelected) colors.accentContainer else colors.cardSecondaryBg)
             .border(
                 width = 1.dp,
-                color = if (isSelected) colors.accent else Color.Transparent,
-                shape = RoundedCornerShape(10.dp)
+                color = if (isSelected) colors.accent.copy(alpha = 0.55f) else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp, horizontal = 4.dp),
@@ -1668,7 +1609,7 @@ private fun SegmentedOptionChip(
         Text(
             text = label,
             fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (isSelected) colors.accent else colors.textSecondary,
             maxLines = 1
         )
@@ -1687,7 +1628,7 @@ private fun SensorStatusBadge(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(bgColor)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
@@ -1702,7 +1643,7 @@ private fun SensorStatusBadge(
             Text(
                 text = "$sensorName: $status",
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = textColor
             )
         }

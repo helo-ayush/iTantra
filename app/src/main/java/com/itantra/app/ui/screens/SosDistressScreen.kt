@@ -1,10 +1,5 @@
 package com.itantra.app.ui.screens
 
-import android.app.Activity
-import android.content.Intent
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -20,14 +15,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -44,35 +36,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.HeadsetMic
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -102,36 +69,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itantra.app.R
 import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.model.VoiceStatus
 import com.itantra.app.modelhub.ModelDownloadState
-import com.itantra.app.ui.theme.AccentBlue
-import com.itantra.app.ui.theme.AccentBlueContainer
-import com.itantra.app.ui.theme.BadgeIndigoContainer
-import com.itantra.app.ui.theme.BadgeIndigoText
 import com.itantra.app.ui.components.DigitalAudioVisualizer
-import com.itantra.app.ui.theme.BadgeMintContainer
-import com.itantra.app.ui.theme.BadgeMintText
-import com.itantra.app.ui.theme.MeshGreen
-import com.itantra.app.ui.theme.MeshGreenText
-import com.itantra.app.ui.theme.RescueAmber
-import com.itantra.app.ui.theme.RescueAmberContainer
-import com.itantra.app.ui.theme.RescueAmberText
+import com.itantra.app.ui.components.soft.SoftBadge
+import com.itantra.app.ui.components.soft.SoftIcon
+import com.itantra.app.ui.components.soft.SoftMissionHeader
+import com.itantra.app.ui.components.soft.SoftStatusDot
 import com.itantra.app.ui.theme.minimalColors
-import com.itantra.app.ui.theme.SosRed
-import com.itantra.app.ui.theme.SosRedDark
 import com.itantra.app.viewmodel.MissionControlViewModel
 import kotlinx.coroutines.launch
 
 /**
- * World-Class Modern, Simplistic Emergency SOS Screen:
- * - High-End Mission Telemetry Header: Brand identity + Live dynamic readiness status
- * - Hero Industrial Tactile SOS Dome: Multi-layer concentric radar guides, realistic specular radial dome,
- *   subtle ambient breathing aura, and responsive Surface touch target
- * - Instant Reassurance & Abort Pill: Clear instructions on standby, high-visibility cancel controls on SOS
- * - Floating Neural Voice Engine Card + 1-Tap Dialect Switcher: Instant quick pills for top Indic dialects + modal sheet
- * - Rescuer Radar & Live Audio Intercom: Real-time visualizer waveform and proximity telemetry on SOS
- * - Grouped "Off-Grid Radios" Hardware Card: Muted standby with auto-engage on emergency distress
+ * Emergency SOS screen, Soft Minimalism edition:
+ * - Telemetry header: brand pill + live readiness capsule
+ * - Soft tactile SOS dome: breathing aura, radar ring, press-scale physics
+ * - Reassurance & stop controls
+ * - Voice engine card + 1-tap dialect chips + language sheet
+ * - Rescuer intercom console (2-way / 1-way receive-only)
+ * - Live transcription card with quick emergency phrases
+ * - Off-grid radios hardware card
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -218,7 +177,7 @@ fun SosDistressScreen(
     val buttonInteractionSource = remember { MutableInteractionSource() }
     val isPressed by buttonInteractionSource.collectIsPressedAsState()
     val buttonPressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
+        targetValue = if (isPressed) 0.96f else 1f,
         animationSpec = tween(120, easing = FastOutSlowInEasing),
         label = "buttonPressScale"
     )
@@ -228,101 +187,22 @@ fun SosDistressScreen(
             .fillMaxSize()
             .background(colors.background)
             .verticalScroll(scrollState)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // =======================================================
-        // 1. HIGH-END MISSION TELEMETRY HEADER
+        // 1. MISSION TELEMETRY HEADER
         // =======================================================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left: Brand & Mode Identity
-            Box(
-                modifier = Modifier
-                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp), spotColor = Color(0x08000000))
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(if (isSosBroadcasting) SosRed else AccentBlue)
-                    )
-                    Text(
-                        text = "iTANTRA",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.2.sp,
-                        color = colors.textPrimary
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(10.dp)
-                            .background(colors.outline)
-                    )
-                    Text(
-                        text = "OFF-GRID",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        color = colors.textSecondary
-                    )
-                }
-            }
-
-            // Right: Dynamic System Status Capsule
-            Box(
-                modifier = Modifier
-                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp), spotColor = Color(0x08000000))
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (isSosBroadcasting) colors.errorContainer else colors.surface
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = if (isSosBroadcasting) colors.error else colors.outline,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .scale(if (isSosBroadcasting) ringScale else 1f)
-                            .clip(CircleShape)
-                            .background(if (isSosBroadcasting) SosRed else MeshGreen)
-                    )
-                    Text(
-                        text = if (isSosBroadcasting) "DISTRESS ACTIVE" else "STANDBY READY",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp,
-                        color = if (isSosBroadcasting) colors.error else colors.textSecondary
-                    )
-                }
-            }
-        }
+        SoftMissionHeader(
+            mode = "Off-grid",
+            statusText = if (isSosBroadcasting) "Distress active" else "Ready",
+            statusActive = isSosBroadcasting,
+            activeColor = colors.error
+        )
 
         // =======================================================
-        // 2. HERO INDUSTRIAL TACTILE EMERGENCY SOS BUTTON
+        // 2. SOFT TACTILE EMERGENCY SOS DOME
         // =======================================================
         Box(
             modifier = Modifier
@@ -338,15 +218,13 @@ fun SosDistressScreen(
                     .alpha(ringAlpha)
                     .clip(CircleShape)
                     .background(
-                        if (isSosBroadcasting) {
-                            Brush.radialGradient(
-                                colors = listOf(Color(0x40EF4444), Color(0x10EF4444), Color.Transparent)
-                            )
-                        } else {
-                            Brush.radialGradient(
-                                colors = listOf(Color(0x18EF4444), Color(0x08EF4444), Color.Transparent)
-                            )
-                        }
+                        Brush.radialGradient(
+                            colors = if (isSosBroadcasting) {
+                                listOf(colors.error.copy(alpha = 0.28f), colors.error.copy(alpha = 0.08f), Color.Transparent)
+                            } else {
+                                listOf(colors.error.copy(alpha = 0.10f), colors.error.copy(alpha = 0.04f), Color.Transparent)
+                            }
+                        )
                     )
             )
 
@@ -356,8 +234,8 @@ fun SosDistressScreen(
                     .size(212.dp)
                     .clip(CircleShape)
                     .border(
-                        width = 1.5.dp,
-                        color = if (isSosBroadcasting) Color(0x40EF4444) else Color(0x1CE2E8F0),
+                        width = 1.dp,
+                        color = if (isSosBroadcasting) colors.error.copy(alpha = 0.30f) else colors.outline,
                         shape = CircleShape
                     )
             )
@@ -368,28 +246,28 @@ fun SosDistressScreen(
                     .align(Alignment.TopCenter)
                     .padding(top = 18.dp)
                     .size(width = 2.dp, height = 6.dp)
-                    .background(Color(0xFFCBD5E1), RoundedCornerShape(1.dp))
+                    .background(colors.outlineStrong, RoundedCornerShape(1.dp))
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 18.dp)
                     .size(width = 2.dp, height = 6.dp)
-                    .background(Color(0xFFCBD5E1), RoundedCornerShape(1.dp))
+                    .background(colors.outlineStrong, RoundedCornerShape(1.dp))
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .padding(start = 18.dp)
                     .size(width = 6.dp, height = 2.dp)
-                    .background(Color(0xFFCBD5E1), RoundedCornerShape(1.dp))
+                    .background(colors.outlineStrong, RoundedCornerShape(1.dp))
             )
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 18.dp)
                     .size(width = 6.dp, height = 2.dp)
-                    .background(Color(0xFFCBD5E1), RoundedCornerShape(1.dp))
+                    .background(colors.outlineStrong, RoundedCornerShape(1.dp))
             )
 
             // Central Tactile Dome Button (Using Surface to guarantee 100% reliable click registration)
@@ -400,7 +278,7 @@ fun SosDistressScreen(
                 shape = CircleShape,
                 color = Color.Transparent,
                 interactionSource = buttonInteractionSource,
-                shadowElevation = if (isSosBroadcasting) 16.dp else 8.dp,
+                shadowElevation = if (isSosBroadcasting) 18.dp else 10.dp,
                 modifier = Modifier
                     .size(178.dp)
                     .scale(buttonPressScale)
@@ -412,29 +290,25 @@ fun SosDistressScreen(
                             brush = if (isSosBroadcasting) {
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFFF5252),
-                                        Color(0xFFE53935),
-                                        Color(0xFFB71C1C),
-                                        Color(0xFF7F1D1D)
+                                        colors.error,
+                                        colors.sosDeep
                                     )
                                 )
                             } else {
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFFF4D4D),
-                                        Color(0xFFEF4444),
-                                        Color(0xFFDC2626),
-                                        Color(0xFF991B1B)
+                                        colors.error.copy(alpha = 0.92f),
+                                        colors.sosDeep
                                     )
                                 )
                             }
                         )
                         .border(
-                            width = 3.dp,
+                            width = 2.5.dp,
                             brush = Brush.verticalGradient(
                                 listOf(
-                                    Color(0x99FFFFFF),
-                                    Color(0x25FFFFFF)
+                                    Color.White.copy(alpha = 0.45f),
+                                    Color.White.copy(alpha = 0.10f)
                                 )
                             ),
                             shape = CircleShape
@@ -450,19 +324,19 @@ fun SosDistressScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_warning,
                                 contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.95f),
+                                tint = Color.White.copy(alpha = 0.9f),
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "EMERGENCY",
+                                text = "Emergency",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.6.sp,
-                                color = Color.White.copy(alpha = 0.95f)
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.2.sp,
+                                color = Color.White.copy(alpha = 0.9f)
                             )
                         }
 
@@ -470,7 +344,7 @@ fun SosDistressScreen(
                         Text(
                             text = "SOS",
                             fontSize = 44.sp,
-                            fontWeight = FontWeight.Black,
+                            fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.5).sp,
                             color = Color.White
                         )
@@ -479,25 +353,25 @@ fun SosDistressScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.22f))
-                                .padding(horizontal = 9.dp, vertical = 2.5.dp)
+                                .background(Color.White.copy(alpha = 0.20f))
+                                .padding(horizontal = 9.dp, vertical = 3.dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(
-                                    imageVector = if (isSosBroadcasting) Icons.Default.NotificationsActive else Icons.Default.Shield,
+                                SoftIcon(
+                                    resId = if (isSosBroadcasting) R.drawable.ic_soft_siren else R.drawable.ic_soft_shield,
                                     contentDescription = null,
                                     tint = Color.White,
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isSosBroadcasting) "DISTRESS ACTIVE" else "TAP TO START",
+                                    text = if (isSosBroadcasting) "Broadcasting" else "Tap to start",
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 0.4.sp,
                                     color = Color.White
                                 )
                             }
@@ -516,26 +390,26 @@ fun SosDistressScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFF1F5F9))
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .background(colors.cardSecondaryBg)
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_shield,
                         contentDescription = null,
-                        tint = AccentBlue,
+                        tint = colors.accent,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Tap SOS to alert all rescue nodes in 250m mesh radius",
+                        text = "Tap SOS to alert every rescue node in a 250 m mesh radius",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF475569),
+                        color = colors.textSecondary,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -548,9 +422,9 @@ fun SosDistressScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "🚨 Emergency Distress Beacon Broadcasting.\nNearby rescuers' phones are vibrating to locate you.",
+                    text = "Your distress beacon is broadcasting.\nNearby rescuers' phones are vibrating to locate you.",
                     fontSize = 13.sp,
-                    color = SosRedDark,
+                    color = colors.sosContainerText,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
                     lineHeight = 18.sp
@@ -559,17 +433,24 @@ fun SosDistressScreen(
                 Button(
                     onClick = { viewModel.stopSos() },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFEE2E2),
-                        contentColor = SosRedDark
+                        containerColor = colors.sosContainer,
+                        contentColor = colors.sosContainerText
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth(0.68f)
                         .height(44.dp)
                 ) {
+                    SoftIcon(
+                        resId = R.drawable.ic_soft_close,
+                        contentDescription = null,
+                        tint = colors.sosContainerText,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "⏹ Stop Distress SOS",
-                        fontWeight = FontWeight.Bold,
+                        text = "Stop distress SOS",
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
                 }
@@ -577,18 +458,18 @@ fun SosDistressScreen(
         }
 
         // =======================================================
-        // 4. FLOATING NEURAL LANGUAGE SELECTOR & 1-TAP DIALECT BAR
+        // 4. VOICE ENGINE CARD & 1-TAP DIALECT BAR
         // =======================================================
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                 .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
                 .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
-                .padding(14.dp)
+                .padding(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Top Row: Selected Language summary & Change trigger
                 Row(
                     modifier = Modifier
@@ -608,18 +489,16 @@ fun SosDistressScreen(
                         Box(
                             modifier = Modifier
                                 .size(46.dp)
-                                .shadow(elevation = 2.dp, shape = RoundedCornerShape(14.dp), spotColor = AccentBlue.copy(alpha = 0.25f))
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)))
-                            ),
+                                .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), spotColor = colors.accent.copy(alpha = 0.25f))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Brush.linearGradient(listOf(colors.accent, colors.accentDeep))),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = selectedLanguage.nativeInitial,
                                 fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.onAccent
                             )
                         }
 
@@ -628,45 +507,37 @@ fun SosDistressScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "VOICE ENGINE",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.8.sp,
+                                    text = "Voice engine",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 0.2.sp,
                                     color = colors.textSecondary
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(colors.cardSecondaryBg)
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = "OFFLINE AI",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textSecondary
-                                    )
-                                }
+                                SoftBadge(
+                                    text = "Offline AI",
+                                    containerColor = colors.cardSecondaryBg,
+                                    contentColor = colors.textSecondary
+                                )
                             }
-                            Spacer(modifier = Modifier.height(1.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "${selectedLanguage.englishName} (${selectedLanguage.nativeName})",
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.textPrimary
                             )
                             Text(
                                 text = when (selectedPackState) {
-                                    is ModelDownloadState.Installed -> "Installed • On-device STT + TTS"
+                                    is ModelDownloadState.Installed -> "Installed · On-device STT + TTS"
                                     is ModelDownloadState.Downloading ->
-                                        "Downloading • ${(selectedPackState.progress * 100).toInt()}%"
+                                        "Downloading · ${(selectedPackState.progress * 100).toInt()}%"
                                     is ModelDownloadState.Paused ->
-                                        "Paused • ${(selectedPackState.progress * 100).toInt()}%"
-                                    is ModelDownloadState.Verifying -> "Verifying • On-device STT + TTS"
-                                    is ModelDownloadState.Extracting -> "Extracting • On-device STT + TTS"
-                                    is ModelDownloadState.Error -> "Download failed • Tap Retry"
-                                    else -> "Not downloaded • ${formatSizeMb(selectedPack?.sizeMb ?: selectedLanguage.downloadSizeMb.toDouble())} MB"
+                                        "Paused · ${(selectedPackState.progress * 100).toInt()}%"
+                                    is ModelDownloadState.Verifying -> "Verifying · On-device STT + TTS"
+                                    is ModelDownloadState.Extracting -> "Extracting · On-device STT + TTS"
+                                    is ModelDownloadState.Error -> "Download failed · Tap to retry"
+                                    else -> "Not downloaded · ${formatSizeMb(selectedPack?.sizeMb ?: selectedLanguage.downloadSizeMb.toDouble())} MB"
                                 },
                                 fontSize = 12.sp,
                                 color = colors.textSecondary
@@ -674,26 +545,26 @@ fun SosDistressScreen(
                         }
                     }
 
-                    // Apple-style modern pill dropdown trigger
+                    // Soft pill dropdown trigger
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(colors.badgeBlueContainer)
+                            .background(colors.accentContainer)
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "Change",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.accent
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.accentContainerText
                             )
                             Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_chevron_down,
                                 contentDescription = "Change Language",
-                                tint = colors.accent,
-                                modifier = Modifier.size(16.dp)
+                                tint = colors.accentContainerText,
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }
@@ -719,22 +590,22 @@ fun SosDistressScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isLangActive) colors.accent else colors.cardSecondaryBg)
                                 .border(
                                     width = 1.dp,
                                     color = if (isLangActive) colors.accent else colors.outline,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                                 .clickable { viewModel.setSelectedLanguage(lang) }
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = lang.nativeName,
                                 fontSize = 11.sp,
-                                fontWeight = if (isLangActive) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isLangActive) Color.White else colors.textSecondary
+                                fontWeight = if (isLangActive) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (isLangActive) colors.onAccent else colors.textSecondary
                             )
                         }
                     }
@@ -742,31 +613,31 @@ fun SosDistressScreen(
                     // "+More" Pill
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(colors.cardSecondaryBg)
                             .clickable { showLanguageSheet = true }
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .padding(horizontal = 9.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "+6",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textSecondary
                         )
                     }
                 }
 
-                // Digital Gray-Line Audio Visualizer (Live Microphone Activity)
+                // Soft Audio Visualizer (Live Microphone Activity)
                 if (isSosBroadcasting) {
                     Spacer(modifier = Modifier.height(4.dp))
                     DigitalAudioVisualizer(
                         audioLevel = audioLevel,
                         isActive = isSosBroadcasting,
                         label = when {
-                            isReceivingOneWayBroadcast -> "RECEIVE-ONLY RESCUER BROADCAST"
-                            connectedRescuer != null -> "LIVE 2-WAY INTERCOM"
-                            else -> "HANDS-FREE EMERGENCY MIC"
+                            isReceivingOneWayBroadcast -> "Receive-only rescuer broadcast"
+                            connectedRescuer != null -> "Live 2-way intercom"
+                            else -> "Hands-free emergency mic"
                         },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -791,9 +662,9 @@ fun SosDistressScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7))
-                            .border(1.dp, Color(0xFFD97706), RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.rescueContainer)
+                            .border(1.dp, colors.rescue.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
                             .padding(12.dp)
                     ) {
                         Row(
@@ -805,28 +676,28 @@ fun SosDistressScreen(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_warning,
                                     contentDescription = null,
-                                    tint = Color(0xFFD97706),
-                                    modifier = Modifier.size(18.dp)
+                                    tint = colors.rescueContainerText,
+                                    modifier = Modifier.size(17.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = modelWarning ?: "",
-                                    fontSize = 11.sp,
-                                    color = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
-                                    lineHeight = 15.sp
+                                    fontSize = 12.sp,
+                                    color = colors.rescueContainerText,
+                                    lineHeight = 16.sp
                                 )
                             }
                             IconButton(
                                 onClick = { viewModel.dismissModelWarning() },
                                 modifier = Modifier.size(24.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_close,
                                     contentDescription = "Dismiss",
-                                    tint = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
+                                    tint = colors.rescueContainerText,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -845,30 +716,18 @@ fun SosDistressScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .shadow(
-                                elevation = 3.dp,
+                                elevation = 4.dp,
                                 shape = RoundedCornerShape(22.dp),
-                                spotColor = if (isBroadcast) RescueAmber.copy(alpha = 0.25f) else MeshGreen.copy(alpha = 0.25f)
+                                spotColor = if (isBroadcast) colors.rescue.copy(alpha = 0.25f) else colors.mesh.copy(alpha = 0.25f)
                             )
                             .clip(RoundedCornerShape(22.dp))
-                            .then(
-                                if (isBroadcast) {
-                                    Modifier.background(
-                                        if (colors.isDark) Color(0xFF451A03).copy(alpha = 0.35f)
-                                        else Color(0xFFFFFBEB)
-                                    )
-                                } else {
-                                    if (colors.isDark) {
-                                        Modifier.background(Color(0xFF064E3B).copy(alpha = 0.35f))
-                                    } else {
-                                        Modifier.background(
-                                            Brush.linearGradient(listOf(Color(0xFFECFDF5), Color(0xFFF0FDF4)))
-                                        )
-                                    }
-                                }
+                            .background(
+                                if (isBroadcast) colors.rescueContainer.copy(alpha = 0.45f)
+                                else colors.meshContainer.copy(alpha = 0.45f)
                             )
                             .border(
-                                1.5.dp,
-                                if (isBroadcast) RescueAmber else MeshGreen,
+                                1.dp,
+                                if (isBroadcast) colors.rescue.copy(alpha = 0.5f) else colors.mesh.copy(alpha = 0.5f),
                                 RoundedCornerShape(22.dp)
                             )
                             .padding(16.dp)
@@ -888,38 +747,38 @@ fun SosDistressScreen(
                                         modifier = Modifier
                                             .size(42.dp)
                                             .clip(CircleShape)
-                                            .background(if (isBroadcast) RescueAmber else MeshGreen),
+                                            .background(if (isBroadcast) colors.rescue else colors.mesh),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = if (isBroadcast) Icons.Default.Campaign else Icons.Default.HeadsetMic,
+                                        SoftIcon(
+                                            resId = if (isBroadcast) R.drawable.ic_soft_megaphone else R.drawable.ic_soft_headset,
                                             contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
+                                            tint = colors.onAccent,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = if (isBroadcast) "EMERGENCY BROADCAST" else "RESCUER CONNECTED",
+                                            text = if (isBroadcast) "Emergency broadcast" else "Rescuer connected",
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isBroadcast) RescueAmberText else MeshGreenText,
-                                            letterSpacing = 0.8.sp
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isBroadcast) colors.rescueContainerText else colors.meshContainerText,
+                                            letterSpacing = 0.3.sp
                                         )
                                         Text(
-                                            text = rescuer?.callsign ?: "Rescuer Megaphone",
+                                            text = rescuer?.callsign ?: "Rescuer megaphone",
                                             fontSize = 16.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = colors.textPrimary
                                         )
                                         Text(
                                             text = if (isBroadcast) {
-                                                "1-Way Announcement • Listen Only"
+                                                "1-way announcement · Listen only"
                                             } else {
                                                 val identity = rescuer?.identityLabel
-                                                "${rescuer?.role ?: "iTantra Rescuer"} • ~${rescuer?.distanceMeters ?: 1}m away" +
-                                                    (identity?.let { " • $it" } ?: "")
+                                                "${rescuer?.role ?: "iTantra rescuer"} · ~${rescuer?.distanceMeters ?: 1} m away" +
+                                                    (identity?.let { " · $it" } ?: "")
                                             },
                                             fontSize = 12.sp,
                                             color = colors.textSecondary
@@ -929,38 +788,30 @@ fun SosDistressScreen(
 
                                 // Status Badge
                                 if (isBroadcast) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(RescueAmber)
-                                            .padding(horizontal = 8.dp, vertical = 5.dp)
-                                    ) {
-                                        Text(
-                                            text = "ON AIR",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
-                                        )
-                                    }
+                                    SoftBadge(
+                                        text = "On air",
+                                        containerColor = colors.rescue,
+                                        contentColor = colors.onAccent
+                                    )
                                 } else {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MeshGreen)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(colors.mesh)
                                             .padding(horizontal = 8.dp, vertical = 6.dp)
                                     ) {
-                                        Box(modifier = Modifier.width(3.dp).height(waveBar1.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                                        Box(modifier = Modifier.width(3.dp).height(waveBar2.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                                        Box(modifier = Modifier.width(3.dp).height(waveBar3.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                                        Box(modifier = Modifier.width(3.dp).height(waveBar4.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                                        Box(modifier = Modifier.width(3.dp).height(waveBar1.dp).background(colors.onAccent, RoundedCornerShape(2.dp)))
+                                        Box(modifier = Modifier.width(3.dp).height(waveBar2.dp).background(colors.onAccent, RoundedCornerShape(2.dp)))
+                                        Box(modifier = Modifier.width(3.dp).height(waveBar3.dp).background(colors.onAccent, RoundedCornerShape(2.dp)))
+                                        Box(modifier = Modifier.width(3.dp).height(waveBar4.dp).background(colors.onAccent, RoundedCornerShape(2.dp)))
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "LIVE",
+                                            text = "Live",
                                             fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.onAccent
                                         )
                                     }
                                 }
@@ -971,32 +822,32 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7))
-                                        .border(1.dp, RescueAmber.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.rescueContainer)
+                                        .border(1.dp, colors.rescue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 12.dp, vertical = 10.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.MicOff,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_mic_off,
                                             contentDescription = null,
-                                            tint = RescueAmberText,
-                                            modifier = Modifier.size(18.dp)
+                                            tint = colors.rescueContainerText,
+                                            modifier = Modifier.size(17.dp)
                                         )
                                         Column {
                                             Text(
-                                                text = "1-WAY RESCUER BROADCAST — REPLIES DISABLED",
+                                                text = "1-way rescuer broadcast — replies disabled",
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E)
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.rescueContainerText
                                             )
                                             Text(
-                                                text = "Rescuer is broadcasting megaphone announcements to all victims. Your mic is locked & muted.",
+                                                text = "The rescuer is broadcasting to everyone in range. Your mic is locked and muted.",
                                                 fontSize = 11.sp,
-                                                color = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
+                                                color = colors.rescueContainerText,
                                                 lineHeight = 15.sp
                                             )
                                         }
@@ -1004,14 +855,14 @@ fun SosDistressScreen(
                                 }
                             }
 
-                            // Digital Gray-Line Audio Visualizer
+                            // Soft Audio Visualizer
                             DigitalAudioVisualizer(
                                 audioLevel = audioLevel,
                                 isActive = true,
                                 label = if (isBroadcast) {
-                                    "RESCUER 1-WAY BROADCAST (RECEIVE ONLY)"
+                                    "Rescuer 1-way broadcast (receive only)"
                                 } else {
-                                    "RESCUER 2-WAY AUDIO LINK"
+                                    "Rescuer 2-way audio link"
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1022,8 +873,8 @@ fun SosDistressScreen(
                                     .fillMaxWidth()
                                     .height(1.dp)
                                     .background(
-                                        if (isBroadcast) RescueAmber.copy(alpha = 0.3f)
-                                        else MeshGreen.copy(alpha = 0.3f)
+                                        if (isBroadcast) colors.rescue.copy(alpha = 0.25f)
+                                        else colors.mesh.copy(alpha = 0.25f)
                                     )
                             )
 
@@ -1038,7 +889,7 @@ fun SosDistressScreen(
                                 // 1. Big Mic Mute / Unmute Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = {
@@ -1049,37 +900,45 @@ fun SosDistressScreen(
                                         enabled = !isBroadcast,
                                         shape = CircleShape,
                                         color = when {
-                                            isBroadcast -> if (colors.isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
-                                            isMicMuted -> if (colors.isDark) Color(0xFF450A0A) else Color(0xFFFEE2E2)
+                                            isBroadcast -> colors.cardSecondaryBg
+                                            isMicMuted -> colors.sosContainer
                                             else -> colors.surface
                                         },
-                                        shadowElevation = if (isBroadcast) 0.dp else 3.dp,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            when {
+                                                isBroadcast -> colors.outline
+                                                isMicMuted -> colors.error.copy(alpha = 0.35f)
+                                                else -> colors.outline
+                                            }
+                                        ),
+                                        shadowElevation = 0.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (isBroadcast || isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                            SoftIcon(
+                                                resId = if (isBroadcast || isMicMuted) R.drawable.ic_soft_mic_off else R.drawable.ic_soft_mic,
                                                 contentDescription = "Mute Mic",
                                                 tint = when {
-                                                    isBroadcast -> colors.textSecondary
-                                                    isMicMuted -> SosRedDark
+                                                    isBroadcast -> colors.textTertiary
+                                                    isMicMuted -> colors.sosContainerText
                                                     else -> colors.textPrimary
                                                 },
-                                                modifier = Modifier.size(26.dp)
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
                                         text = when {
-                                            isBroadcast -> "Mic Locked"
+                                            isBroadcast -> "Mic locked"
                                             isMicMuted -> "Unmute"
-                                            else -> "Mute Mic"
+                                            else -> "Mute mic"
                                         },
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        fontWeight = FontWeight.Medium,
                                         color = when {
-                                            isBroadcast -> colors.textSecondary
-                                            isMicMuted -> SosRedDark
+                                            isBroadcast -> colors.textTertiary
+                                            isMicMuted -> colors.sosContainerText
                                             else -> colors.textSecondary
                                         }
                                     )
@@ -1088,36 +947,40 @@ fun SosDistressScreen(
                                 // 2. Big Speakerphone Toggle Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = { viewModel.toggleSpeakerphone() },
                                         shape = CircleShape,
-                                        color = if (isSpeakerphoneOn) AccentBlueContainer else colors.surface,
-                                        shadowElevation = 3.dp,
+                                        color = if (isSpeakerphoneOn) colors.accentContainer else colors.surface,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSpeakerphoneOn) colors.accent.copy(alpha = 0.35f) else colors.outline
+                                        ),
+                                        shadowElevation = 0.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (isSpeakerphoneOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.Hearing,
+                                            SoftIcon(
+                                                resId = if (isSpeakerphoneOn) R.drawable.ic_soft_volume else R.drawable.ic_soft_hearing,
                                                 contentDescription = "Speaker",
-                                                tint = if (isSpeakerphoneOn) AccentBlue else colors.textPrimary,
-                                                modifier = Modifier.size(26.dp)
+                                                tint = if (isSpeakerphoneOn) colors.accent else colors.textPrimary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
                                         text = if (isSpeakerphoneOn) "Speaker" else "Earpiece",
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isSpeakerphoneOn) AccentBlue else colors.textSecondary
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isSpeakerphoneOn) colors.accent else colors.textSecondary
                                     )
                                 }
 
                                 // 3. Big Disconnect Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = {
@@ -1125,24 +988,24 @@ fun SosDistressScreen(
                                         },
                                         enabled = true,
                                         shape = CircleShape,
-                                        color = if (isBroadcast) RescueAmber else SosRed,
-                                        shadowElevation = 4.dp,
+                                        color = if (isBroadcast) colors.rescue else colors.error,
+                                        shadowElevation = 2.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (isBroadcast) Icons.Default.Close else Icons.Default.CallEnd,
+                                            SoftIcon(
+                                                resId = if (isBroadcast) R.drawable.ic_soft_close else R.drawable.ic_soft_call_end,
                                                 contentDescription = if (isBroadcast) "Dismiss Broadcast" else "Disconnect",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(26.dp)
+                                                tint = colors.onAccent,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
-                                        text = if (isBroadcast) "Dismiss" else "End Call",
+                                        text = if (isBroadcast) "Dismiss" else "End call",
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isBroadcast) RescueAmberText else SosRedDark
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isBroadcast) colors.rescueContainerText else colors.sosContainerText
                                     )
                                 }
                             }
@@ -1157,7 +1020,7 @@ fun SosDistressScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                            .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                             .clip(RoundedCornerShape(22.dp))
                             .background(colors.surface)
                             .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1174,45 +1037,25 @@ fun SosDistressScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "LIVE TRANSCRIPTION",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.8.sp,
-                                        color = colors.textSecondary
+                                        text = "Live transcription",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textPrimary
                                     )
                                     // Model status indicator badge
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                if (selectedPack?.isInstalled == true) BadgeMintContainer
-                                                else Color(0xFFFEF3C7)
-                                            )
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = if (selectedPack?.isInstalled == true) "✓ AI STT ACTIVE" else "⚠️ PACK REQUIRED",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (selectedPack?.isInstalled == true) BadgeMintText else Color(0xFF92400E)
-                                        )
-                                    }
+                                    SoftBadge(
+                                        text = if (selectedPack?.isInstalled == true) "STT active" else "Pack required",
+                                        containerColor = if (selectedPack?.isInstalled == true) colors.badgeMintContainer else colors.rescueContainer,
+                                        contentColor = if (selectedPack?.isInstalled == true) colors.badgeMintText else colors.rescueContainerText
+                                    )
                                 }
 
                                 if (messageLogs.isNotEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(BadgeMintContainer)
-                                            .padding(horizontal = 7.dp, vertical = 3.dp)
-                                    ) {
-                                        Text(
-                                            text = "${messageLogs.size} MSG",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = BadgeMintText
-                                        )
-                                    }
+                                    SoftBadge(
+                                        text = "${messageLogs.size} msgs",
+                                        containerColor = colors.badgeMintContainer,
+                                        contentColor = colors.badgeMintText
+                                    )
                                 }
                             }
 
@@ -1221,26 +1064,26 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7))
-                                        .border(1.dp, Color(0xFFF59E0B), RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.rescueContainer)
+                                        .border(1.dp, colors.rescue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                                         .padding(10.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.WarningAmber,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_warning,
                                             contentDescription = null,
-                                            tint = Color(0xFFB45309),
-                                            modifier = Modifier.size(18.dp)
+                                            tint = colors.rescueContainerText,
+                                            modifier = Modifier.size(17.dp)
                                         )
                                         Text(
                                             text = modelWarning ?: "",
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF92400E),
-                                            lineHeight = 15.sp
+                                            fontSize = 12.sp,
+                                            color = colors.rescueContainerText,
+                                            lineHeight = 16.sp
                                         )
                                     }
                                 }
@@ -1254,30 +1097,30 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
-                                        .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(colors.cardSecondaryBg)
+                                        .border(1.dp, colors.outline, RoundedCornerShape(14.dp))
                                         .padding(vertical = 12.dp, horizontal = 14.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Hearing,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_hearing,
                                             contentDescription = null,
                                             tint = colors.textSecondary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Column {
                                             Text(
-                                                text = "RECEIVE-ONLY EMERGENCY BROADCAST",
+                                                text = "Receive-only emergency broadcast",
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
+                                                fontWeight = FontWeight.SemiBold,
                                                 color = colors.textPrimary
                                             )
                                             Text(
-                                                text = "Rescuer is transmitting one-way. Mic is disabled.",
+                                                text = "The rescuer is transmitting one-way. Your mic is disabled.",
                                                 fontSize = 11.sp,
                                                 color = colors.textSecondary,
                                                 lineHeight = 15.sp
@@ -1292,26 +1135,21 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFFDC2626).copy(alpha = 0.12f))
-                                        .border(0.5.dp, Color(0xFFDC2626).copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.error.copy(alpha = 0.10f))
+                                        .border(0.5.dp, colors.error.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                         .padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFFDC2626))
-                                        )
+                                        SoftStatusDot(color = colors.error, dotSize = 8.dp)
                                         Text(
-                                            text = "RECORDING SPEECH... (Release button or pause to send)",
+                                            text = "Recording… release or pause to send",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFFDC2626)
+                                            color = colors.sosContainerText
                                         )
                                     }
                                 }
@@ -1326,25 +1164,24 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(
                                             when {
-                                                isListening -> SosRed.copy(alpha = 0.15f)
-                                                isTranscribing -> BadgeMintContainer.copy(alpha = 0.6f)
-                                                isWarning -> if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7)
-                                                colors.isDark -> Color(0xFF1E3A5F).copy(alpha = 0.6f)
-                                                else -> Color(0xFFEFF6FF)
+                                                isListening -> colors.error.copy(alpha = 0.10f)
+                                                isTranscribing -> colors.meshContainer.copy(alpha = 0.55f)
+                                                isWarning -> colors.rescueContainer
+                                                else -> colors.accentContainer.copy(alpha = 0.6f)
                                             }
                                         )
                                         .border(
                                             1.dp,
                                             when {
-                                                isListening -> SosRed.copy(alpha = 0.6f)
-                                                isTranscribing -> Color(0xFF059669).copy(alpha = 0.5f)
-                                                isWarning -> Color(0xFFF59E0B)
-                                                else -> AccentBlue.copy(alpha = 0.4f)
+                                                isListening -> colors.error.copy(alpha = 0.4f)
+                                                isTranscribing -> colors.mesh.copy(alpha = 0.4f)
+                                                isWarning -> colors.rescue.copy(alpha = 0.5f)
+                                                else -> colors.accent.copy(alpha = 0.3f)
                                             },
-                                            RoundedCornerShape(12.dp)
+                                            RoundedCornerShape(14.dp)
                                         )
                                         .padding(12.dp)
                                 ) {
@@ -1355,33 +1192,24 @@ fun SosDistressScreen(
                                     ) {
                                         Text(
                                             text = if (isListening || isTranscribing || isWarning) currentTranscript
-                                                   else "\"$currentTranscript\"",
+                                            else "\"$currentTranscript\"",
                                             fontSize = 13.sp,
-                                            fontWeight = if (isListening || isTranscribing) FontWeight.Bold else FontWeight.Medium,
+                                            fontWeight = if (isListening || isTranscribing) FontWeight.SemiBold else FontWeight.Medium,
                                             color = when {
-                                                isListening -> SosRedDark
-                                                isTranscribing -> Color(0xFF065F46)
-                                                isWarning -> if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E)
-                                                colors.isDark -> Color(0xFFBFDBFE)
-                                                else -> Color(0xFF1E40AF)
+                                                isListening -> colors.sosContainerText
+                                                isTranscribing -> colors.meshContainerText
+                                                isWarning -> colors.rescueContainerText
+                                                else -> colors.accentContainerText
                                             },
                                             lineHeight = 18.sp,
                                             modifier = Modifier.weight(1f)
                                         )
                                         if (!isListening && !isTranscribing && !isWarning) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(BadgeMintContainer)
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = "✓ SENT",
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = BadgeMintText
-                                                )
-                                            }
+                                            SoftBadge(
+                                                text = "Sent",
+                                                containerColor = colors.badgeMintContainer,
+                                                contentColor = colors.badgeMintText
+                                            )
                                         }
                                     }
                                 }
@@ -1390,22 +1218,22 @@ fun SosDistressScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
+                                        .clip(RoundedCornerShape(14.dp))
                                         .background(colors.cardSecondaryBg)
                                         .padding(12.dp)
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(
-                                            text = "🎙️ Voice Transceiver Standby",
+                                            text = "Voice transceiver standby",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = colors.textPrimary
                                         )
                                         Text(
                                             text = if (selectedPack?.isInstalled == true)
-                                                "Hands-free voice active. Neural AI STT will transcribe and broadcast text over mesh for TTS playback."
+                                                "Hands-free voice is active. Speech is transcribed and broadcast as text over the mesh."
                                             else
-                                                "Neural STT pack is not downloaded. Voice-to-text requires the offline language model in Model Hub.",
+                                                "The neural STT pack isn't downloaded yet. Voice-to-text needs the offline language model.",
                                             fontSize = 11.sp,
                                             color = colors.textSecondary,
                                             lineHeight = 15.sp
@@ -1417,10 +1245,10 @@ fun SosDistressScreen(
                             // Localized Quick Emergency Transmit Chips
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "QUICK EMERGENCY PHRASES (${selectedLanguage.nativeName.uppercase()})",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp,
+                                    text = "Quick emergency phrases (${selectedLanguage.englishName})",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 0.2.sp,
                                     color = colors.textSecondary
                                 )
                                 Row(
@@ -1432,16 +1260,16 @@ fun SosDistressScreen(
                                     selectedLanguage.quickSosPhrases.forEach { phrase ->
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
-                                                .border(0.5.dp, colors.outline, RoundedCornerShape(8.dp))
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(colors.cardSecondaryBg)
+                                                .border(0.5.dp, colors.outline, RoundedCornerShape(12.dp))
                                                 .clickable { viewModel.sendBroadcastTextMessage(phrase) }
                                                 .padding(horizontal = 10.dp, vertical = 7.dp)
                                         ) {
                                             Text(
                                                 text = phrase,
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = FontWeight.Medium,
                                                 color = colors.textPrimary
                                             )
                                         }
@@ -1454,7 +1282,7 @@ fun SosDistressScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
                                         .background(colors.cardSecondaryBg)
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1464,18 +1292,18 @@ fun SosDistressScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(20.dp)
-                                            .clip(RoundedCornerShape(4.dp))
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(
-                                                if (msg.isLocal) AccentBlue.copy(alpha = 0.15f)
-                                                else MeshGreen.copy(alpha = 0.15f)
+                                                if (msg.isLocal) colors.accentContainer
+                                                else colors.meshContainer
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = if (msg.isLocal) "↑" else "↓",
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (msg.isLocal) AccentBlue else MeshGreen
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (msg.isLocal) colors.accentContainerText else colors.meshContainerText
                                         )
                                     }
                                     Column(modifier = Modifier.weight(1f)) {
@@ -1487,7 +1315,7 @@ fun SosDistressScreen(
                                             maxLines = 3
                                         )
                                         Text(
-                                            text = if (msg.isLocal) "You • ${msg.senderCallsign}" else "Rescuer • ${msg.senderCallsign}",
+                                            text = if (msg.isLocal) "You · ${msg.senderCallsign}" else "Rescuer · ${msg.senderCallsign}",
                                             fontSize = 10.sp,
                                             color = colors.textSecondary
                                         )
@@ -1502,7 +1330,7 @@ fun SosDistressScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                        .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                         .clip(RoundedCornerShape(22.dp))
                         .background(colors.surface)
                         .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1515,25 +1343,19 @@ fun SosDistressScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "NEARBY RESCUERS IN RANGE (${nearbyRescuers.size})",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = colors.textSecondary
+                                text = "Rescuers in range (${nearbyRescuers.size})",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textPrimary
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(MeshGreen)
-                                )
+                                SoftStatusDot(color = colors.mesh, dotSize = 7.dp)
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "Scanning 250m",
+                                    text = "Scanning 250 m",
                                     fontSize = 11.sp,
                                     color = colors.badgeMintText,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
@@ -1542,9 +1364,9 @@ fun SosDistressScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(colors.cardSecondaryBg)
-                                    .border(0.5.dp, colors.outline, RoundedCornerShape(12.dp))
+                                    .border(0.5.dp, colors.outline, RoundedCornerShape(14.dp))
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -1555,16 +1377,16 @@ fun SosDistressScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(10.dp))
                                             .background(colors.badgeBlueContainer),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.HeadsetMic,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_headset,
                                             contentDescription = null,
-                                            tint = colors.accent,
-                                            modifier = Modifier.size(18.dp)
+                                            tint = colors.badgeBlueText,
+                                            modifier = Modifier.size(17.dp)
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
@@ -1572,31 +1394,23 @@ fun SosDistressScreen(
                                         Text(
                                             text = rescuer.callsign,
                                             fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = colors.textPrimary
                                         )
                                         Text(
-                                            text = "${rescuer.role} • ${rescuer.distanceMeters}m away" +
-                                                (rescuer.identityLabel?.let { " • $it" } ?: ""),
+                                            text = "${rescuer.role} · ${rescuer.distanceMeters} m away" +
+                                                (rescuer.identityLabel?.let { " · $it" } ?: ""),
                                             fontSize = 11.sp,
                                             color = colors.textSecondary
                                         )
                                     }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (rescuer.isConnected) colors.badgeMintContainer else colors.badgeBlueContainer)
-                                        .padding(horizontal = 7.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = if (rescuer.isConnected) "LINKED" else "READY",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (rescuer.isConnected) colors.badgeMintText else colors.badgeBlueText
-                                    )
-                                }
+                                SoftBadge(
+                                    text = if (rescuer.isConnected) "Linked" else "Ready",
+                                    containerColor = if (rescuer.isConnected) colors.badgeMintContainer else colors.badgeBlueContainer,
+                                    contentColor = if (rescuer.isConnected) colors.badgeMintText else colors.badgeBlueText
+                                )
                             }
                         }
                     }
@@ -1619,7 +1433,7 @@ fun SosDistressScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .alpha(radioAlpha)
-                .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                 .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
                 .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1633,26 +1447,17 @@ fun SosDistressScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "OFF-GRID RADIOS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "Off-grid radios",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSosBroadcasting) colors.badgeMintContainer else colors.cardSecondaryBg)
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = if (isSosBroadcasting) "Broadcasting Full Power" else "Auto-Starts on SOS",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSosBroadcasting) colors.badgeMintText else colors.textSecondary
-                        )
-                    }
+                    SoftBadge(
+                        text = if (isSosBroadcasting) "Broadcasting at full power" else "Auto-starts on SOS",
+                        containerColor = if (isSosBroadcasting) colors.badgeMintContainer else colors.cardSecondaryBg,
+                        contentColor = if (isSosBroadcasting) colors.badgeMintText else colors.textSecondary
+                    )
                 }
 
                 // Row 1: Wi-Fi Direct P2P Mesh
@@ -1668,15 +1473,15 @@ fun SosDistressScreen(
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSosBroadcasting) AccentBlueContainer else Color(0xFFF1F5F9)),
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(if (isSosBroadcasting) colors.accentContainer else colors.cardSecondaryBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Wifi,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_wifi,
                                 contentDescription = "Wi-Fi Direct",
-                                tint = if (isSosBroadcasting) AccentBlue else Color(0xFF94A3B8),
-                                modifier = Modifier.size(20.dp)
+                                tint = if (isSosBroadcasting) colors.accent else colors.textTertiary,
+                                modifier = Modifier.size(19.dp)
                             )
                         }
 
@@ -1687,33 +1492,25 @@ fun SosDistressScreen(
                                 Text(
                                     text = "Wi-Fi Direct P2P",
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(if (isSosBroadcasting) BadgeMintContainer else Color(0xFFF1F5F9))
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = if (isSosBroadcasting) "P2P Active" else "Locked",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (isSosBroadcasting) BadgeMintText else Color(0xFF64748B)
-                                    )
-                                }
+                                SoftBadge(
+                                    text = if (isSosBroadcasting) "P2P active" else "Locked",
+                                    containerColor = if (isSosBroadcasting) colors.badgeMintContainer else colors.cardSecondaryBg,
+                                    contentColor = if (isSosBroadcasting) colors.badgeMintText else colors.textTertiary
+                                )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isSosBroadcasting) {
-                                    "Broadcasting on UDP port 8889 • direct device link"
+                                    "Broadcasting on UDP port 8889 · direct device link"
                                 } else {
                                     "High-speed local audio & mesh network"
                                 },
                                 fontSize = 12.sp,
-                                color = Color(0xFF64748B)
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -1723,14 +1520,14 @@ fun SosDistressScreen(
                         onCheckedChange = { viewModel.toggleWifiDirect(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = AccentBlue,
+                            checkedTrackColor = colors.accent,
                             uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFCBD5E1)
+                            uncheckedTrackColor = colors.outlineStrong
                         )
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+                HorizontalDivider(color = colors.outline, thickness = 1.dp)
 
                 // Row 2: Bluetooth BLE Beacon
                 Row(
@@ -1745,15 +1542,15 @@ fun SosDistressScreen(
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSosBroadcasting) BadgeIndigoContainer else Color(0xFFF1F5F9)),
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(if (isSosBroadcasting) colors.badgeBlueContainer else colors.cardSecondaryBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Bluetooth,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_bluetooth,
                                 contentDescription = "Bluetooth",
-                                tint = if (isSosBroadcasting) BadgeIndigoText else Color(0xFF94A3B8),
-                                modifier = Modifier.size(20.dp)
+                                tint = if (isSosBroadcasting) colors.badgeBlueText else colors.textTertiary,
+                                modifier = Modifier.size(19.dp)
                             )
                         }
 
@@ -1762,31 +1559,23 @@ fun SosDistressScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Bluetooth BLE Mesh",
+                                    text = "Bluetooth BLE mesh",
                                     fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(if (isSosBroadcasting) BadgeIndigoContainer else Color(0xFFF1F5F9))
-                                        .padding(horizontal = 5.dp, vertical = 1.dp)
-                                ) {
-                                    Text(
-                                        text = if (isSosBroadcasting) "BLE Active" else "Locked",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = if (isSosBroadcasting) BadgeIndigoText else Color(0xFF64748B)
-                                    )
-                                }
+                                SoftBadge(
+                                    text = if (isSosBroadcasting) "BLE active" else "Locked",
+                                    containerColor = if (isSosBroadcasting) colors.badgeBlueContainer else colors.cardSecondaryBg,
+                                    contentColor = if (isSosBroadcasting) colors.badgeBlueText else colors.textTertiary
+                                )
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (isSosBroadcasting) "Broadcasting emergency beacon" else "Continuous low-power emergency beacon",
                                 fontSize = 12.sp,
-                                color = Color(0xFF64748B)
+                                color = colors.textSecondary
                             )
                         }
                     }
@@ -1796,9 +1585,9 @@ fun SosDistressScreen(
                         onCheckedChange = { viewModel.toggleBluetooth(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
-                            checkedTrackColor = AccentBlue,
+                            checkedTrackColor = colors.accent,
                             uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFCBD5E1)
+                            uncheckedTrackColor = colors.outlineStrong
                         )
                     )
                 }
@@ -1809,7 +1598,7 @@ fun SosDistressScreen(
     }
 
     // =======================================================
-    // 7. HIGH-END 10-LANGUAGE MODAL BOTTOM SHEET WITH SEARCH
+    // 7. 10-LANGUAGE MODAL BOTTOM SHEET WITH SEARCH
     // =======================================================
     if (showLanguageSheet) {
         ModalBottomSheet(
@@ -1823,7 +1612,7 @@ fun SosDistressScreen(
                         .padding(top = 12.dp, bottom = 8.dp)
                         .size(width = 38.dp, height = 4.dp)
                         .clip(CircleShape)
-                        .background(colors.outline)
+                        .background(colors.outlineStrong)
                 )
             }
         ) {
@@ -1841,13 +1630,13 @@ fun SosDistressScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Select Distress Voice Model",
+                            text = "Voice language",
                             fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "10 Indic neural AI bundles run 100% on-device",
+                            text = "10 Indic neural packs, 100% on-device",
                             fontSize = 12.sp,
                             color = colors.textSecondary
                         )
@@ -1860,8 +1649,8 @@ fun SosDistressScreen(
                             }
                         }
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_close,
                             contentDescription = "Close",
                             tint = colors.textSecondary
                         )
@@ -1872,7 +1661,7 @@ fun SosDistressScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(colors.cardSecondaryBg)
                         .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
@@ -1880,11 +1669,11 @@ fun SosDistressScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_search,
                             contentDescription = "Search",
-                            tint = colors.textSecondary,
-                            modifier = Modifier.size(18.dp)
+                            tint = colors.textTertiary,
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         BasicTextField(
@@ -1899,9 +1688,9 @@ fun SosDistressScreen(
                             decorationBox = { innerTextField ->
                                 if (languageSearchQuery.isEmpty()) {
                                     Text(
-                                        text = "Search language or dialect...",
+                                        text = "Search language or dialect…",
                                         fontSize = 14.sp,
-                                        color = colors.textSecondary
+                                        color = colors.textTertiary
                                     )
                                 }
                                 innerTextField()
@@ -1920,7 +1709,7 @@ fun SosDistressScreen(
                         val q = languageSearchQuery.trim().lowercase()
                         SupportedLanguage.entries.filter {
                             it.englishName.lowercase().contains(q) ||
-                            it.nativeName.lowercase().contains(q)
+                                it.nativeName.lowercase().contains(q)
                         }
                     }
                 }
@@ -1942,10 +1731,10 @@ fun SosDistressScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(if (isSelected) colors.badgeBlueContainer else colors.cardSecondaryBg)
+                                .background(if (isSelected) colors.accentContainer else colors.cardSecondaryBg)
                                 .border(
-                                    width = if (isSelected) 2.dp else 1.dp,
-                                    color = if (isSelected) colors.accent else colors.outline,
+                                    width = 1.dp,
+                                    color = if (isSelected) colors.accent.copy(alpha = 0.5f) else colors.outline,
                                     shape = RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
@@ -1971,24 +1760,29 @@ fun SosDistressScreen(
                                         Box(
                                             modifier = Modifier
                                                 .size(42.dp)
-                                                .clip(RoundedCornerShape(12.dp))
+                                                .clip(RoundedCornerShape(13.dp))
                                                 .background(
                                                     when (state) {
                                                         is ModelDownloadState.Installed -> colors.accent
                                                         is ModelDownloadState.Downloading,
                                                         is ModelDownloadState.Paused,
                                                         is ModelDownloadState.Verifying,
-                                                        is ModelDownloadState.Extracting -> BadgeIndigoContainer
-                                                        else -> colors.outline
+                                                        is ModelDownloadState.Extracting -> colors.accentContainer
+                                                        else -> colors.surface
                                                     }
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    if (state is ModelDownloadState.Installed) colors.accent else colors.outline,
+                                                    RoundedCornerShape(13.dp)
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
                                                 text = lang.nativeInitial,
                                                 fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected || state is ModelDownloadState.Installed) Color.White else colors.textSecondary
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (state is ModelDownloadState.Installed) colors.onAccent else colors.textSecondary
                                             )
                                         }
 
@@ -1999,21 +1793,21 @@ fun SosDistressScreen(
                                                 Text(
                                                     text = lang.englishName,
                                                     fontSize = 15.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isSelected) colors.accent else colors.textPrimary
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (isSelected) colors.accentContainerText else colors.textPrimary
                                                 )
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
                                                     text = "(${lang.nativeName})",
                                                     fontSize = 14.sp,
-                                                    color = if (isSelected) colors.accent else colors.textSecondary
+                                                    color = colors.textSecondary
                                                 )
                                             }
 
                                             Text(
-                                                text = "On-Device Size: ${formatSizeMb(sizeMb)} MB (STT + TTS)",
+                                                text = "On-device size · ${formatSizeMb(sizeMb)} MB (STT + TTS)",
                                                 fontSize = 12.sp,
-                                                color = if (isSelected) colors.accent.copy(alpha = 0.85f) else colors.textSecondary
+                                                color = colors.textSecondary
                                             )
                                         }
                                     }
@@ -2021,44 +1815,35 @@ fun SosDistressScreen(
                                     // Trailing action, driven by the live download state.
                                     when {
                                         state is ModelDownloadState.Installed && isSelected -> {
-                                            Box(
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clip(RoundedCornerShape(10.dp))
                                                     .background(colors.accent)
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    .padding(horizontal = 8.dp, vertical = 5.dp)
                                             ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(12.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(3.dp))
-                                                    Text(
-                                                        text = "ACTIVE",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color.White
-                                                    )
-                                                }
+                                                SoftIcon(
+                                                    resId = R.drawable.ic_soft_check,
+                                                    contentDescription = null,
+                                                    tint = colors.onAccent,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(3.dp))
+                                                Text(
+                                                    text = "Active",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.onAccent
+                                                )
                                             }
                                         }
 
                                         state is ModelDownloadState.Installed -> {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(colors.badgeMintContainer)
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = "INSTALLED",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = colors.badgeMintText
-                                                )
-                                            }
+                                            SoftBadge(
+                                                text = "Installed",
+                                                containerColor = colors.badgeMintContainer,
+                                                contentColor = colors.badgeMintText
+                                            )
                                         }
 
                                         state is ModelDownloadState.Downloading -> {
@@ -2067,22 +1852,22 @@ fun SosDistressScreen(
                                                     onClick = { viewModel.pauseModelDownload(lang.languageTag) },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Pause,
+                                                    SoftIcon(
+                                                        resId = R.drawable.ic_soft_pause,
                                                         contentDescription = "Pause ${lang.englishName}",
                                                         tint = colors.textSecondary,
-                                                        modifier = Modifier.size(17.dp)
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                                 IconButton(
                                                     onClick = { viewModel.cancelModelDownload(lang.languageTag) },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Cancel,
+                                                    SoftIcon(
+                                                        resId = R.drawable.ic_soft_close,
                                                         contentDescription = "Cancel ${lang.englishName}",
-                                                        tint = SosRedDark,
-                                                        modifier = Modifier.size(17.dp)
+                                                        tint = colors.error,
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
@@ -2094,22 +1879,22 @@ fun SosDistressScreen(
                                                     onClick = { viewModel.downloadModel(lang.languageTag) },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.PlayArrow,
+                                                    SoftIcon(
+                                                        resId = R.drawable.ic_soft_play,
                                                         contentDescription = "Resume ${lang.englishName}",
                                                         tint = colors.accent,
-                                                        modifier = Modifier.size(17.dp)
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                                 IconButton(
                                                     onClick = { viewModel.cancelModelDownload(lang.languageTag) },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Cancel,
+                                                    SoftIcon(
+                                                        resId = R.drawable.ic_soft_close,
                                                         contentDescription = "Cancel ${lang.englishName}",
-                                                        tint = SosRedDark,
-                                                        modifier = Modifier.size(17.dp)
+                                                        tint = colors.error,
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
@@ -2120,18 +1905,18 @@ fun SosDistressScreen(
                                                 Text(
                                                     text = if (state is ModelDownloadState.Verifying) "Verifying…" else "Extracting…",
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
+                                                    fontWeight = FontWeight.SemiBold,
                                                     color = colors.accent
                                                 )
                                                 IconButton(
                                                     onClick = { viewModel.cancelModelDownload(lang.languageTag) },
                                                     modifier = Modifier.size(30.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Cancel,
+                                                    SoftIcon(
+                                                        resId = R.drawable.ic_soft_close,
                                                         contentDescription = "Cancel ${lang.englishName}",
-                                                        tint = SosRedDark,
-                                                        modifier = Modifier.size(17.dp)
+                                                        tint = colors.error,
+                                                        modifier = Modifier.size(16.dp)
                                                     )
                                                 }
                                             }
@@ -2141,11 +1926,11 @@ fun SosDistressScreen(
                                             Text(
                                                 text = "Retry",
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
+                                                fontWeight = FontWeight.SemiBold,
                                                 color = colors.error,
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(colors.errorContainer)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(colors.sosContainer)
                                                     .clickable { viewModel.downloadModel(lang.languageTag) }
                                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                                             )
@@ -2156,23 +1941,23 @@ fun SosDistressScreen(
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .clip(RoundedCornerShape(10.dp))
                                                     .background(colors.accent)
                                                     .clickable { viewModel.downloadModel(lang.languageTag) }
                                                     .padding(horizontal = 10.dp, vertical = 6.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Download,
+                                                SoftIcon(
+                                                    resId = R.drawable.ic_soft_download,
                                                     contentDescription = null,
-                                                    tint = Color.White,
+                                                    tint = colors.onAccent,
                                                     modifier = Modifier.size(14.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = "Download • ${formatSizeMb(sizeMb)} MB",
+                                                    text = "Download · ${formatSizeMb(sizeMb)} MB",
                                                     fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.onAccent
                                                 )
                                             }
                                         }
@@ -2192,7 +1977,7 @@ fun SosDistressScreen(
                                             trackColor = colors.outline
                                         )
                                         Text(
-                                            text = "${(state.progress * 100).toInt()}% • ${formatSizeMb(state.progressBytes / (1024.0 * 1024.0))} / ${formatSizeMb(state.totalBytes / (1024.0 * 1024.0))} MB",
+                                            text = "${(state.progress * 100).toInt()}% · ${formatSizeMb(state.progressBytes / (1024.0 * 1024.0))} / ${formatSizeMb(state.totalBytes / (1024.0 * 1024.0))} MB",
                                             fontSize = 11.sp,
                                             color = colors.textSecondary
                                         )
@@ -2208,9 +1993,9 @@ fun SosDistressScreen(
                                             trackColor = colors.outline
                                         )
                                         Text(
-                                            text = "PAUSED • ${(state.progress * 100).toInt()}%",
+                                            text = "Paused · ${(state.progress * 100).toInt()}%",
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = colors.badgePurpleText
                                         )
                                     }
@@ -2218,7 +2003,7 @@ fun SosDistressScreen(
                                         Text(
                                             text = state.message,
                                             fontSize = 11.sp,
-                                            color = SosRedDark
+                                            color = colors.error
                                         )
                                     }
                                     else -> Unit

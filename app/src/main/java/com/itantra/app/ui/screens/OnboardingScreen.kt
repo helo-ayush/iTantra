@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -136,11 +138,10 @@ fun OnboardingScreen(
                     .border(1.dp, colors.accent.copy(alpha = 0.25f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                SoftIcon(
-                    resId = R.drawable.ic_soft_shield,
-                    contentDescription = "iTantra Shield",
-                    tint = colors.accent,
-                    modifier = Modifier.size(32.dp)
+                Image(
+                    painter = painterResource(R.drawable.img_logo_itrantra),
+                    contentDescription = "iTantra logo",
+                    modifier = Modifier.size(42.dp)
                 )
             }
 

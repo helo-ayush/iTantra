@@ -41,6 +41,31 @@ val Manrope = FontFamily(
     )
 )
 
+// Brand wordmark family — used only for the "iTantra" logo text.
+@OptIn(ExperimentalTextApi::class)
+val ComfortaaBrand = FontFamily(
+    Font(
+        R.font.comfortaa_variable,
+        weight = FontWeight.Normal,
+        variationSettings = FontVariation.Settings(FontVariation.weight(400))
+    ),
+    Font(
+        R.font.comfortaa_variable,
+        weight = FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500))
+    ),
+    Font(
+        R.font.comfortaa_variable,
+        weight = FontWeight.SemiBold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(600))
+    ),
+    Font(
+        R.font.comfortaa_variable,
+        weight = FontWeight.Bold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(700))
+    )
+)
+
 val Typography = Typography(
     // Screen title: 28sp SemiBold
     displayLarge = TextStyle(

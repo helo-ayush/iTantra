@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itantra.app.R
+import com.itantra.app.ui.theme.ComfortaaBrand
 import com.itantra.app.ui.theme.MinimalColorsInstance
 import com.itantra.app.ui.theme.SoftCardShape
 import com.itantra.app.ui.theme.SoftPillShape
@@ -487,14 +489,15 @@ fun SoftSwitchRow(
 
 // ----------------------------------------------------------- Sheet shell ----
 
-/** Shared mission telemetry header: brand pill left, status capsule right. */
+/** Shared mission telemetry header: brand logo + wordmark left, status capsule right. */
 @Composable
 fun SoftMissionHeader(
     mode: String,
     statusText: String,
     statusActive: Boolean,
     modifier: Modifier = Modifier,
-    activeColor: Color = MinimalColorsInstance.mesh
+    activeColor: Color = MinimalColorsInstance.mesh,
+    logoRes: Int? = null
 ) {
     val colors = MinimalColorsInstance
     Row(
@@ -512,11 +515,20 @@ fun SoftMissionHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SoftStatusDot(color = colors.accent, dotSize = 7.dp)
+            if (logoRes != null) {
+                Image(
+                    painter = painterResource(logoRes),
+                    contentDescription = "iTantra logo",
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                SoftStatusDot(color = colors.accent, dotSize = 7.dp)
+            }
             Text(
                 text = "iTantra",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontFamily = ComfortaaBrand,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
                 color = colors.textPrimary
             )
             Box(

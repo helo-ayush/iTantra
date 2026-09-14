@@ -179,7 +179,8 @@ fun RescueScreen(
                 connectionMode == RescueConnectionMode.BROADCAST_ALL -> colors.rescue
                 connectionMode == RescueConnectionMode.ONE_TO_ONE -> colors.error
                 else -> colors.mesh
-            }
+            },
+            logoRes = R.drawable.img_logo_itrantra
         )
 
         // =========================================================================

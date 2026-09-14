@@ -198,7 +198,8 @@ fun SosDistressScreen(
             mode = "Off-grid",
             statusText = if (isSosBroadcasting) "Distress active" else "Ready",
             statusActive = isSosBroadcasting,
-            activeColor = colors.error
+            activeColor = colors.error,
+            logoRes = R.drawable.img_logo_itrantra
         )
 
         // =======================================================

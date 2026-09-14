@@ -187,7 +187,8 @@ fun WalkieScreen(
             mode = "Walkie mesh",
             statusText = if (isWalkieActive) "Team live" else "Standby",
             statusActive = isWalkieActive,
-            activeColor = colors.mesh
+            activeColor = colors.mesh,
+            logoRes = R.drawable.img_logo_itrantra
         )
 
         // =======================================================

@@ -1,12 +1,9 @@
 package com.itantra.app.ui.screens
 
-import android.app.Activity
-import android.content.Intent
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -16,15 +13,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -36,55 +30,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Campaign
-import androidx.compose.material.icons.filled.CellTower
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.PhoneDisabled
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Radar
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.SwapHoriz
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.layout.heightIn
-import com.itantra.app.model.SupportedLanguage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -108,60 +77,40 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.window.DialogProperties
+import com.itantra.app.R
 import com.itantra.app.model.DistressVictim
 import com.itantra.app.model.RescueConnectionMode
+import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.model.VoiceStatus
 import com.itantra.app.ui.components.BatteryIndicator
 import com.itantra.app.ui.components.DigitalAudioVisualizer
-import com.itantra.app.ui.theme.AccentBlue
-import com.itantra.app.ui.theme.AccentBlueContainer
-import com.itantra.app.ui.theme.BadgeMintContainer
-import com.itantra.app.ui.theme.BadgeMintText
-import com.itantra.app.ui.theme.RescueAmber
-import com.itantra.app.ui.theme.RescueAmberContainer
-import com.itantra.app.ui.theme.RescueAmberText
-import com.itantra.app.ui.theme.SosRed
-import com.itantra.app.ui.theme.SosRedContainer
-import com.itantra.app.ui.theme.SosRedDark
+import com.itantra.app.ui.components.soft.SoftBadge
+import com.itantra.app.ui.components.soft.SoftIcon
+import com.itantra.app.ui.components.soft.SoftMissionHeader
+import com.itantra.app.ui.components.soft.SoftSheetShell
+import com.itantra.app.ui.components.soft.SoftStatusDot
+import com.itantra.app.ui.theme.SoftFieldShape
 import com.itantra.app.ui.theme.minimalColors
 import com.itantra.app.viewmodel.MissionControlViewModel
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * World-Class Mission Rescue Screen:
- * 1. Pre-Boot Standby Mode:
- *    - Prominent, highlighted "BOOT RESCUE SYSTEM" hero dome with tactical radar aesthetics.
- *    - Off-grid search capabilities summary with zero technical jargon.
- * 2. Active Rescue Mode:
- *    - Top mission telemetry with real-time victim locator count.
- *    - Tactical Connection Control Console:
- *        - Real-time connection mode badge: STANDBY / 1-TO-1 DIRECT VOICE / BROADCASTING TO ALL.
- *        - One-Way Emergency Broadcast Trigger: Streams voice message to all nearby SOS victims simultaneously.
- *        - 1-to-1 Voice Link Card: Direct hands-free translated conversation with selected victim.
- * 3. 100% Offline Relative Tactical Compass Radar Map:
- *    - Dead-center positioning of the Rescuer (game-style tactical minimap).
- *    - Rotates dynamically by compass heading so the Rescuer's forward heading is ALWAYS facing UP.
- *    - Concentric metric distance rings (25m, 50m, 75m, 100m).
- *    - Cardinal direction markers (N, E, S, W) that rotate with the compass.
- *    - Animated sweep beam and glowing victim blips with distance labels.
- * 4. Fullscreen Tactical Map Mode:
- *    - Expandable via "Expand Map" button.
- *    - High-contrast close ("X") button at top right.
- *    - Range selection filters and victim selector drawer.
- * 5. Distress Victims Queue:
- *    - Rich victim cards with relative distances, friendly signal indicators, hazard tags,
- *      quoted distress messages in native language, and direct 1-to-1 connect buttons.
+ * Rescue console, Soft Minimalism edition:
+ * 1. Standby: soft apricot "Start rescue" hero dome with radar rings
+ * 2. Active: connection console (mode badge, 1-way broadcast trigger, call controls)
+ * 3. Live transcription card
+ * 4. Tactical rescue map (compact + fullscreen, pinch-zoom/pan)
+ * 5. Distress beacons queue with connect / switch / end actions
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -197,13 +146,11 @@ fun RescueScreen(
 
     val scrollState = rememberScrollState()
 
-
-
     // Standby Button Press State Physics
     val bootButtonSource = remember { MutableInteractionSource() }
     val isBootPressed by bootButtonSource.collectIsPressedAsState()
     val bootButtonScale by animateFloatAsState(
-        targetValue = if (isBootPressed) 0.94f else 1.0f,
+        targetValue = if (isBootPressed) 0.96f else 1.0f,
         animationSpec = tween(120),
         label = "bootButtonScale"
     )
@@ -213,94 +160,27 @@ fun RescueScreen(
             .fillMaxSize()
             .background(colors.background)
             .verticalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // =========================================================================
         // TOP TELEMETRY PILLS (Consistent with SOS & Walkie pages)
         // =========================================================================
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isRescueActive) RescueAmber else colors.textSecondary)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "iTANTRA",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    Text(
-                        text = " | RESCUE RADAR",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textSecondary
-                    )
-                }
+        SoftMissionHeader(
+            mode = "Rescue radar",
+            statusText = when {
+                !isRescueActive -> "Standby"
+                connectionMode == RescueConnectionMode.BROADCAST_ALL -> "Broadcast active"
+                connectionMode == RescueConnectionMode.ONE_TO_ONE -> "1-to-1 call"
+                else -> "${activeVictims.size} in range"
+            },
+            statusActive = isRescueActive,
+            activeColor = when {
+                connectionMode == RescueConnectionMode.BROADCAST_ALL -> colors.rescue
+                connectionMode == RescueConnectionMode.ONE_TO_ONE -> colors.error
+                else -> colors.mesh
             }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        when {
-                            !isRescueActive -> colors.cardSecondaryBg
-                            connectionMode == RescueConnectionMode.BROADCAST_ALL -> RescueAmberContainer
-                            connectionMode == RescueConnectionMode.ONE_TO_ONE -> SosRedContainer
-                            else -> BadgeMintContainer
-                        }
-                    )
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    !isRescueActive -> colors.textSecondary
-                                    connectionMode == RescueConnectionMode.BROADCAST_ALL -> RescueAmber
-                                    connectionMode == RescueConnectionMode.ONE_TO_ONE -> SosRedDark
-                                    else -> Color(0xFF059669)
-                                }
-                            )
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            !isRescueActive -> "RADAR STANDBY"
-                            connectionMode == RescueConnectionMode.BROADCAST_ALL -> "BROADCAST ACTIVE"
-                            connectionMode == RescueConnectionMode.ONE_TO_ONE -> "1-TO-1 CALL ACTIVE"
-                            else -> "${activeVictims.size} VICTIMS IN RANGE"
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = when {
-                            !isRescueActive -> colors.textSecondary
-                            connectionMode == RescueConnectionMode.BROADCAST_ALL -> RescueAmberText
-                            connectionMode == RescueConnectionMode.ONE_TO_ONE -> SosRedDark
-                            else -> BadgeMintText
-                        }
-                    )
-                }
-            }
-        }
+        )
 
         // =========================================================================
         // RESCUE OPERATING LANGUAGE SELECTOR & 1-TAP DIALECT BAR
@@ -308,12 +188,13 @@ fun RescueScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(18.dp))
-                .padding(14.dp)
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
+                .padding(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Top Row: Selected Language summary & Switch trigger
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -323,70 +204,69 @@ fun RescueScreen(
                     Row(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { showLanguageSheet = true },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .clip(CircleShape)
-                                .background(colors.accent.copy(alpha = 0.15f)),
+                                .background(colors.accentContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = selectedLanguage.nativeInitial,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.accent
                             )
                         }
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "RESCUE DIALECT: ",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
+                                    text = "Rescue dialect: ",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = colors.textSecondary
                                 )
                                 Text(
                                     text = "${selectedLanguage.englishName} (${selectedLanguage.code.uppercase()})",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                             }
                             val isInstalled = modelPacks.firstOrNull { it.iso == selectedLanguage.code || it.languageTag.startsWith(selectedLanguage.code) }?.isInstalled == true
                             Text(
-                                text = if (isInstalled) "✓ Neural Pack Ready" else "⚠ Pack Not Installed (${selectedLanguage.downloadSizeMb} MB)",
+                                text = if (isInstalled) "Neural pack ready" else "Pack not installed · ${selectedLanguage.downloadSizeMb} MB",
                                 fontSize = 11.sp,
-                                fontWeight = if (isInstalled) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isInstalled) Color(0xFF059669) else RescueAmberText
+                                fontWeight = if (isInstalled) FontWeight.Medium else FontWeight.Normal,
+                                color = if (isInstalled) colors.meshContainerText else colors.rescueContainerText
                             )
                         }
                     }
 
                     Surface(
                         onClick = { showLanguageSheet = true },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = colors.cardSecondaryBg,
                         border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "SWITCH",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = "Switch",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.accent
                             )
                             Spacer(modifier = Modifier.width(3.dp))
-                            Icon(
-                                imageVector = Icons.Default.ExpandMore,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_chevron_down,
                                 contentDescription = "Switch Language",
                                 tint = colors.accent,
                                 modifier = Modifier.size(14.dp)
@@ -395,7 +275,7 @@ fun RescueScreen(
                     }
                 }
 
-                HorizontalDivider(color = colors.outline.copy(alpha = 0.5f), thickness = 1.dp)
+                HorizontalDivider(color = colors.outline.copy(alpha = 0.6f), thickness = 1.dp)
 
                 // 1-Tap Dialect Chips: Hindi, English, Bengali, Marathi, etc.
                 Row(
@@ -416,30 +296,30 @@ fun RescueScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isLangActive) colors.accent else colors.cardSecondaryBg)
                                 .border(
                                     width = 1.dp,
                                     color = if (isLangActive) colors.accent else colors.outline,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                                 .clickable { viewModel.setSelectedLanguage(lang) }
-                                .padding(vertical = 7.dp),
+                                .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = lang.englishName,
                                     fontSize = 11.sp,
-                                    fontWeight = if (isLangActive) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isLangActive) Color.White else colors.textPrimary
+                                    fontWeight = if (isLangActive) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isLangActive) colors.onAccent else colors.textPrimary
                                 )
                                 if (isInstalled) {
                                     Text(
-                                        text = "READY",
+                                        text = "Ready",
                                         fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isLangActive) Color(0xFFD1FAE5) else Color(0xFF059669)
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isLangActive) colors.onAccent.copy(alpha = 0.8f) else colors.meshContainerText
                                     )
                                 }
                             }
@@ -449,17 +329,17 @@ fun RescueScreen(
                     // "+More" Pill
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(colors.cardSecondaryBg)
-                            .border(1.dp, colors.outline, RoundedCornerShape(8.dp))
+                            .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
                             .clickable { showLanguageSheet = true }
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "+6",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textSecondary
                         )
                     }
@@ -472,7 +352,7 @@ fun RescueScreen(
         // =========================================================================
         if (!isRescueActive) {
             // =====================================================================
-            // STANDBY MODE: PROMINENT TACTICAL BOOT-UP DOME
+            // STANDBY MODE: SOFT TACTICAL BOOT-UP DOME
             // =====================================================================
             Box(
                 modifier = Modifier
@@ -495,10 +375,10 @@ fun RescueScreen(
                 )
 
                 // 4 Cardinal Micro-Ticks
-                Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(width = 2.dp, height = 6.dp).background(colors.textSecondary.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).size(width = 2.dp, height = 6.dp).background(colors.textSecondary.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 18.dp).size(width = 6.dp, height = 2.dp).background(colors.textSecondary.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).size(width = 6.dp, height = 2.dp).background(colors.textSecondary.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
+                Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(width = 2.dp, height = 6.dp).background(colors.outlineStrong, RoundedCornerShape(1.dp)))
+                Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).size(width = 2.dp, height = 6.dp).background(colors.outlineStrong, RoundedCornerShape(1.dp)))
+                Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 18.dp).size(width = 6.dp, height = 2.dp).background(colors.outlineStrong, RoundedCornerShape(1.dp)))
+                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).size(width = 6.dp, height = 2.dp).background(colors.outlineStrong, RoundedCornerShape(1.dp)))
 
                 // Highlighted Hero Tactile Button (Major Action to Boot Rescue System)
                 Surface(
@@ -506,7 +386,7 @@ fun RescueScreen(
                     shape = CircleShape,
                     color = Color.Transparent,
                     interactionSource = bootButtonSource,
-                    shadowElevation = 10.dp,
+                    shadowElevation = 12.dp,
                     modifier = Modifier
                         .size(178.dp)
                         .scale(bootButtonScale)
@@ -517,17 +397,15 @@ fun RescueScreen(
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFFBBF24),
-                                        Color(0xFFF59E0B),
-                                        Color(0xFFD97706),
-                                        Color(0xFF0F172A)
+                                        colors.rescue,
+                                        colors.rescueDeep
                                     )
                                 )
                             )
                             .border(
-                                width = 3.dp,
+                                width = 2.5.dp,
                                 brush = Brush.verticalGradient(
-                                    listOf(Color(0x99FFFFFF), Color(0x25FFFFFF))
+                                    listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.10f))
                                 ),
                                 shape = CircleShape
                             ),
@@ -541,28 +419,28 @@ fun RescueScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Radar,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_radar,
                                     contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.95f),
+                                    tint = Color.White.copy(alpha = 0.9f),
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "SEARCH & RESCUE",
+                                    text = "Search & rescue",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.4.sp,
-                                    color = Color.White.copy(alpha = 0.95f)
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 1.0.sp,
+                                    color = Color.White.copy(alpha = 0.9f)
                                 )
                             }
 
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Text(
-                                text = "RESCUE",
+                                text = "Rescue",
                                 fontSize = 36.sp,
-                                fontWeight = FontWeight.Black,
+                                fontWeight = FontWeight.SemiBold,
                                 letterSpacing = (-0.5).sp,
                                 color = Color.White
                             )
@@ -572,25 +450,25 @@ fun RescueScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(Color.White.copy(alpha = 0.22f))
+                                    .background(Color.White.copy(alpha = 0.20f))
                                     .padding(horizontal = 10.dp, vertical = 3.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CellTower,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_tower,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(11.dp)
+                                        modifier = Modifier.size(12.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "BOOT SYSTEM",
+                                        text = "Start",
                                         fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.6.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.4.sp,
                                         color = Color.White
                                     )
                                 }
@@ -604,9 +482,9 @@ fun RescueScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .background(colors.surface)
-                    .border(1.dp, colors.outline, RoundedCornerShape(16.dp))
+                    .border(1.dp, colors.outline, RoundedCornerShape(18.dp))
                     .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Row(
@@ -617,26 +495,26 @@ fun RescueScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(RescueAmberContainer),
+                            .background(colors.rescueContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_bell,
                             contentDescription = null,
-                            tint = RescueAmberText,
-                            modifier = Modifier.size(19.dp)
+                            tint = colors.rescueContainerText,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                     Column {
                         Text(
-                            text = "Automatic Distress Beacon Detection",
+                            text = "Automatic distress beacon detection",
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Booting activates offline radar scanning for nearby SOS victims. Phone vibrates when a beacon is found.",
+                            text = "Starting begins offline radar scanning for nearby SOS phones. Yours vibrates when a beacon is found.",
                             fontSize = 12.sp,
                             color = colors.textSecondary
                         )
@@ -644,7 +522,6 @@ fun RescueScreen(
                 }
             }
 
-            // Quick Capabilities Row (Clean, zero technical jargon)
             // Quick Capabilities (Clean, 2x2 grid, zero technical jargon)
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -654,19 +531,19 @@ fun RescueScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("100% Offline Minimap", "Compass Oriented").forEach { feature ->
+                    listOf("100% offline minimap", "Compass oriented").forEach { feature ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(colors.cardSecondaryBg)
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = feature,
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textSecondary
                             )
                         }
@@ -676,19 +553,19 @@ fun RescueScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("1-Way All Broadcast", "1-to-1 Voice Link").forEach { feature ->
+                    listOf("1-way all broadcast", "1-to-1 voice link").forEach { feature ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(colors.cardSecondaryBg)
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = feature,
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textSecondary
                             )
                         }
@@ -704,7 +581,7 @@ fun RescueScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x12000000))
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(22.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -717,61 +594,52 @@ fun RescueScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        when (connectionMode) {
-                                            RescueConnectionMode.BROADCAST_ALL -> RescueAmberContainer
-                                            RescueConnectionMode.ONE_TO_ONE -> SosRedContainer
-                                            else -> AccentBlueContainer
-                                        }
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = when (connectionMode) {
-                                        RescueConnectionMode.BROADCAST_ALL -> "📢 BROADCAST TO ALL"
-                                        RescueConnectionMode.ONE_TO_ONE -> "● 1-TO-1 VOICE LINK"
-                                        else -> "● SCANNING VICINITY"
-                                    },
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = when (connectionMode) {
-                                        RescueConnectionMode.BROADCAST_ALL -> RescueAmberText
-                                        RescueConnectionMode.ONE_TO_ONE -> SosRedDark
-                                        else -> AccentBlue
-                                    }
-                                )
+                        SoftBadge(
+                            text = when (connectionMode) {
+                                RescueConnectionMode.BROADCAST_ALL -> "Broadcast to all"
+                                RescueConnectionMode.ONE_TO_ONE -> "1-to-1 voice link"
+                                else -> "Scanning vicinity"
+                            },
+                            containerColor = when (connectionMode) {
+                                RescueConnectionMode.BROADCAST_ALL -> colors.rescueContainer
+                                RescueConnectionMode.ONE_TO_ONE -> colors.sosContainer
+                                else -> colors.accentContainer
+                            },
+                            contentColor = when (connectionMode) {
+                                RescueConnectionMode.BROADCAST_ALL -> colors.rescueContainerText
+                                RescueConnectionMode.ONE_TO_ONE -> colors.sosContainerText
+                                else -> colors.accentContainerText
+                            },
+                            leadingIconRes = when (connectionMode) {
+                                RescueConnectionMode.BROADCAST_ALL -> R.drawable.ic_soft_megaphone
+                                else -> null
                             }
-                        }
+                        )
 
                         // Highlighted "Leave Rescue" Button (High visibility, prominent)
                         Surface(
                             onClick = { viewModel.bootRescueSystem(false) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFFFEE2E2),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                            shadowElevation = 1.dp
+                            shape = RoundedCornerShape(12.dp),
+                            color = colors.sosContainer,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, colors.error.copy(alpha = 0.35f)),
+                            shadowElevation = 0.dp
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PowerSettingsNew,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_power,
                                     contentDescription = "Leave Rescue",
-                                    tint = SosRedDark,
+                                    tint = colors.sosContainerText,
                                     modifier = Modifier.size(15.dp)
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "LEAVE RESCUE",
+                                    text = "Leave rescue",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp,
-                                    color = SosRedDark
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.sosContainerText
                                 )
                             }
                         }
@@ -781,10 +649,10 @@ fun RescueScreen(
                     Surface(
                         onClick = { viewModel.toggleBroadcastToAll() },
                         shape = RoundedCornerShape(16.dp),
-                        color = if (isBroadcastingToAll) RescueAmberContainer else if (colors.isDark) Color(0xFF261E14) else Color(0xFFFFFBEB),
+                        color = if (isBroadcastingToAll) colors.rescueContainer else colors.rescueContainer.copy(alpha = 0.45f),
                         border = androidx.compose.foundation.BorderStroke(
-                            1.5.dp,
-                            if (isBroadcastingToAll) RescueAmber else if (colors.isDark) Color(0xFF78350F) else Color(0xFFFCD34D)
+                            1.dp,
+                            if (isBroadcastingToAll) colors.rescue else colors.rescue.copy(alpha = 0.45f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -804,47 +672,47 @@ fun RescueScreen(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(if (isBroadcastingToAll) RescueAmber else if (colors.isDark) Color(0xFF451A03) else Color(0xFFFDE68A)),
+                                        .background(if (isBroadcastingToAll) colors.rescue else colors.rescue.copy(alpha = 0.7f)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Campaign,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_megaphone,
                                         contentDescription = "Broadcast",
-                                        tint = if (isBroadcastingToAll) Color.White else RescueAmberText,
-                                        modifier = Modifier.size(20.dp)
+                                        tint = colors.onAccent,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                                 Column(modifier = Modifier.padding(end = 8.dp)) {
                                     Text(
-                                        text = if (isBroadcastingToAll) "BROADCASTING TO ALL" else "Broadcast to All (1-Way)",
+                                        text = if (isBroadcastingToAll) "Broadcasting to all" else "Broadcast to all (1-way)",
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = RescueAmberText,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.rescueContainerText,
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = if (isBroadcastingToAll) "Live transmitting to ${activeVictims.size} targets..." else "Stream announcement to all SOS phones",
+                                        text = if (isBroadcastingToAll) "Live, to ${activeVictims.size} phones…" else "Stream an announcement to every SOS phone",
                                         fontSize = 11.sp,
-                                        color = if (colors.isDark) Color(0xFFFCD34D) else Color(0xFF92400E),
+                                        color = colors.rescueContainerText,
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isBroadcastingToAll) RescueAmber else colors.surface)
-                                    .border(1.dp, if (isBroadcastingToAll) Color.Transparent else if (colors.isDark) Color(0xFF78350F) else Color(0xFFFCD34D), RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isBroadcastingToAll) colors.rescue else colors.surface)
+                                    .border(1.dp, if (isBroadcastingToAll) Color.Transparent else colors.rescue.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                                     .padding(horizontal = 12.dp, vertical = 6.dp)
                             ) {
                                 Text(
-                                    text = if (isBroadcastingToAll) "STOP" else "BROADCAST",
+                                    text = if (isBroadcastingToAll) "Stop" else "Broadcast",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isBroadcastingToAll) Color.White else RescueAmberText,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isBroadcastingToAll) colors.onAccent else colors.rescueContainerText,
                                     maxLines = 1
                                 )
                             }
@@ -860,14 +728,14 @@ fun RescueScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .background(
-                                if (connectedVictim != null) (if (colors.isDark) Color(0xFF3B1219) else Color(0xFFFEF2F2))
-                                else if (isBroadcastingToAll) (if (colors.isDark) Color(0xFF2E1C0C) else Color(0xFFFFFBEB))
+                                if (connectedVictim != null) colors.error.copy(alpha = 0.08f)
+                                else if (isBroadcastingToAll) colors.rescueContainer.copy(alpha = 0.45f)
                                 else colors.cardSecondaryBg
                             )
                             .border(
                                 width = 1.dp,
-                                color = if (connectedVictim != null) (if (colors.isDark) Color(0xFF991B1B) else Color(0xFFFCA5A5))
-                                else if (isBroadcastingToAll) (if (colors.isDark) Color(0xFF78350F) else Color(0xFFFCD34D))
+                                color = if (connectedVictim != null) colors.error.copy(alpha = 0.4f)
+                                else if (isBroadcastingToAll) colors.rescue.copy(alpha = 0.45f)
                                 else colors.outline,
                                 shape = RoundedCornerShape(18.dp)
                             )
@@ -887,64 +755,54 @@ fun RescueScreen(
                                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                                     Text(
                                         text = when {
-                                            activeVictimLink != null -> "CONNECTED: ${activeVictimLink.callsign}"
-                                            isBroadcastingToAll -> "TRANSMITTING TO ALL VICTIMS"
-                                            else -> "RESCUE AUDIO CONSOLE"
+                                            activeVictimLink != null -> "Connected: ${activeVictimLink.callsign}"
+                                            isBroadcastingToAll -> "Transmitting to everyone"
+                                            else -> "Rescue audio console"
                                         },
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = when {
-                                            activeVictimLink != null -> if (colors.isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B)
-                                            isBroadcastingToAll -> RescueAmberText
+                                            activeVictimLink != null -> colors.sosContainerText
+                                            isBroadcastingToAll -> colors.rescueContainerText
                                             else -> colors.textPrimary
                                         },
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = when {
-                                            activeVictimLink != null -> "~${activeVictimLink.distanceMeters}m away • Direct 2-Way Voice"
-                                            isBroadcastingToAll -> "1-Way Rescuer Announcement Channel"
-                                            else -> "Hands-Free VAD Voice • Select victim to link"
+                                            activeVictimLink != null -> "~${activeVictimLink.distanceMeters} m away · Direct 2-way voice"
+                                            isBroadcastingToAll -> "1-way rescuer announcement channel"
+                                            else -> "Hands-free voice · Select a person to link"
                                         },
                                         fontSize = 11.sp,
                                         color = when {
-                                            activeVictimLink != null -> if (colors.isDark) Color(0xFFF87171) else Color(0xFFB91C1C)
-                                            isBroadcastingToAll -> if (colors.isDark) Color(0xFFFCD34D) else Color(0xFF92400E)
+                                            activeVictimLink != null -> colors.sosContainerText
+                                            isBroadcastingToAll -> colors.rescueContainerText
                                             else -> colors.textSecondary
                                         },
                                         maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            when {
-                                                connectedVictim != null -> SosRed
-                                                isBroadcastingToAll -> RescueAmber
-                                                else -> BadgeMintContainer
-                                            }
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = when {
-                                            connectedVictim != null -> "LIVE CALL"
-                                            isBroadcastingToAll -> "ON AIR"
-                                            else -> "READY"
-                                        },
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = when {
-                                            connectedVictim != null -> Color.White
-                                            isBroadcastingToAll -> Color.White
-                                            else -> BadgeMintText
-                                        }
-                                    )
-                                }
+                                SoftBadge(
+                                    text = when {
+                                        connectedVictim != null -> "Live call"
+                                        isBroadcastingToAll -> "On air"
+                                        else -> "Ready"
+                                    },
+                                    containerColor = when {
+                                        connectedVictim != null -> colors.error
+                                        isBroadcastingToAll -> colors.rescue
+                                        else -> colors.badgeMintContainer
+                                    },
+                                    contentColor = when {
+                                        connectedVictim != null -> colors.onAccent
+                                        isBroadcastingToAll -> colors.onAccent
+                                        else -> colors.badgeMintText
+                                    }
+                                )
                             }
 
                             // Divider
@@ -953,8 +811,8 @@ fun RescueScreen(
                                     .fillMaxWidth()
                                     .height(1.dp)
                                     .background(
-                                        if (connectedVictim != null) (if (colors.isDark) Color(0xFF7F1D1D) else Color(0xFFFECACA))
-                                        else if (isBroadcastingToAll) (if (colors.isDark) Color(0xFF78350F) else Color(0xFFFDE68A))
+                                        if (connectedVictim != null) colors.error.copy(alpha = 0.25f)
+                                        else if (isBroadcastingToAll) colors.rescue.copy(alpha = 0.25f)
                                         else colors.outline
                                     )
                             )
@@ -964,9 +822,9 @@ fun RescueScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7))
-                                        .border(1.dp, RescueAmber.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.rescueContainer)
+                                        .border(1.dp, colors.rescue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                                         .padding(10.dp)
                                 ) {
                                     Row(
@@ -978,28 +836,28 @@ fun RescueScreen(
                                             modifier = Modifier.weight(1f),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.WarningAmber,
+                                            SoftIcon(
+                                                resId = R.drawable.ic_soft_warning,
                                                 contentDescription = null,
-                                                tint = RescueAmber,
-                                                modifier = Modifier.size(18.dp)
+                                                tint = colors.rescueContainerText,
+                                                modifier = Modifier.size(17.dp)
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
                                                 text = modelWarning ?: "",
-                                                fontSize = 11.sp,
-                                                color = if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E),
-                                                lineHeight = 15.sp
+                                                fontSize = 12.sp,
+                                                color = colors.rescueContainerText,
+                                                lineHeight = 16.sp
                                             )
                                         }
                                         IconButton(
                                             onClick = { viewModel.dismissModelWarning() },
                                             modifier = Modifier.size(24.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
+                                            SoftIcon(
+                                                resId = R.drawable.ic_soft_close,
                                                 contentDescription = "Dismiss",
-                                                tint = RescueAmber,
+                                                tint = colors.rescueContainerText,
                                                 modifier = Modifier.size(14.dp)
                                             )
                                         }
@@ -1007,14 +865,14 @@ fun RescueScreen(
                                 }
                             }
 
-                            // Digital Gray-Line Audio Visualizer
+                            // Soft Audio Visualizer
                             DigitalAudioVisualizer(
                                 audioLevel = audioLevel,
                                 isActive = connectedVictim != null || isBroadcastingToAll,
                                 label = when {
-                                    connectedVictim != null -> "RESCUER 2-WAY INTERCOM"
-                                    isBroadcastingToAll -> "RESCUE BROADCAST ON AIR"
-                                    else -> "AUDIO STANDBY"
+                                    connectedVictim != null -> "Rescuer 2-way intercom"
+                                    isBroadcastingToAll -> "Rescue broadcast on air"
+                                    else -> "Audio standby"
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1030,65 +888,73 @@ fun RescueScreen(
                                 // 1. Big Mic Mute / Unmute Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = { viewModel.toggleMicMute() },
                                         shape = CircleShape,
-                                        color = if (isMicMuted) (if (colors.isDark) Color(0xFF450A0A) else Color(0xFFFEE2E2)) else colors.surface,
-                                        shadowElevation = 3.dp,
+                                        color = if (isMicMuted) colors.sosContainer else colors.surface,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isMicMuted) colors.error.copy(alpha = 0.35f) else colors.outline
+                                        ),
+                                        shadowElevation = 0.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                            SoftIcon(
+                                                resId = if (isMicMuted) R.drawable.ic_soft_mic_off else R.drawable.ic_soft_mic,
                                                 contentDescription = "Mute Mic",
-                                                tint = if (isMicMuted) SosRedDark else colors.textPrimary,
-                                                modifier = Modifier.size(26.dp)
+                                                tint = if (isMicMuted) colors.sosContainerText else colors.textPrimary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
-                                        text = if (isMicMuted) "Unmute" else "Mute Mic",
+                                        text = if (isMicMuted) "Unmute" else "Mute mic",
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isMicMuted) SosRedDark else colors.textSecondary
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isMicMuted) colors.sosContainerText else colors.textSecondary
                                     )
                                 }
 
                                 // 2. Big Speakerphone Toggle Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = { viewModel.toggleSpeakerphone() },
                                         shape = CircleShape,
-                                        color = if (isSpeakerphoneOn) AccentBlueContainer else colors.surface,
-                                        shadowElevation = 3.dp,
+                                        color = if (isSpeakerphoneOn) colors.accentContainer else colors.surface,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSpeakerphoneOn) colors.accent.copy(alpha = 0.35f) else colors.outline
+                                        ),
+                                        shadowElevation = 0.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = if (isSpeakerphoneOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.Hearing,
+                                            SoftIcon(
+                                                resId = if (isSpeakerphoneOn) R.drawable.ic_soft_volume else R.drawable.ic_soft_hearing,
                                                 contentDescription = "Speaker",
-                                                tint = if (isSpeakerphoneOn) AccentBlue else colors.textPrimary,
-                                                modifier = Modifier.size(26.dp)
+                                                tint = if (isSpeakerphoneOn) colors.accent else colors.textPrimary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
                                         text = if (isSpeakerphoneOn) "Speaker" else "Earpiece",
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (isSpeakerphoneOn) AccentBlue else colors.textSecondary
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isSpeakerphoneOn) colors.accent else colors.textSecondary
                                     )
                                 }
 
                                 // 3. Big Disconnect Button (58dp)
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Surface(
                                         onClick = {
@@ -1099,28 +965,28 @@ fun RescueScreen(
                                             }
                                         },
                                         shape = CircleShape,
-                                        color = SosRed,
-                                        shadowElevation = 4.dp,
+                                        color = colors.error,
+                                        shadowElevation = 2.dp,
                                         modifier = Modifier.size(58.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.CallEnd,
+                                            SoftIcon(
+                                                resId = R.drawable.ic_soft_call_end,
                                                 contentDescription = "Disconnect",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(26.dp)
+                                                tint = colors.onAccent,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                     Text(
                                         text = when {
-                                            connectedVictim != null -> "End Call"
+                                            connectedVictim != null -> "End call"
                                             isBroadcastingToAll -> "Stop"
                                             else -> "Standby"
                                         },
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SosRedDark
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.sosContainerText
                                     )
                                 }
                             }
@@ -1136,7 +1002,7 @@ fun RescueScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                        .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                         .clip(RoundedCornerShape(22.dp))
                         .background(colors.surface)
                         .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1153,45 +1019,25 @@ fun RescueScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "LIVE TRANSCRIPTION",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.8.sp,
-                                    color = colors.textSecondary
+                                    text = "Live transcription",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
                                 )
                                 // Model status indicator badge
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(
-                                            if (isModelInstalled) BadgeMintContainer
-                                            else Color(0xFFFEF3C7)
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = if (isModelInstalled) "✓ AI STT ACTIVE" else "⚠️ PACK REQUIRED",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isModelInstalled) BadgeMintText else Color(0xFF92400E)
-                                    )
-                                }
+                                SoftBadge(
+                                    text = if (isModelInstalled) "STT active" else "Pack required",
+                                    containerColor = if (isModelInstalled) colors.badgeMintContainer else colors.rescueContainer,
+                                    contentColor = if (isModelInstalled) colors.badgeMintText else colors.rescueContainerText
+                                )
                             }
 
                             if (messageLogs.isNotEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(BadgeMintContainer)
-                                        .padding(horizontal = 7.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "${messageLogs.size} MSG",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = BadgeMintText
-                                    )
-                                }
+                                SoftBadge(
+                                    text = "${messageLogs.size} msgs",
+                                    containerColor = colors.badgeMintContainer,
+                                    contentColor = colors.badgeMintText
+                                )
                             }
                         }
 
@@ -1200,26 +1046,26 @@ fun RescueScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7))
-                                    .border(1.dp, Color(0xFFF59E0B), RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.rescueContainer)
+                                    .border(1.dp, colors.rescue.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                                     .padding(10.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WarningAmber,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_warning,
                                         contentDescription = null,
-                                        tint = Color(0xFFB45309),
-                                        modifier = Modifier.size(18.dp)
+                                        tint = colors.rescueContainerText,
+                                        modifier = Modifier.size(17.dp)
                                     )
                                     Text(
                                         text = modelWarning ?: "",
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF92400E),
-                                        lineHeight = 15.sp
+                                        fontSize = 12.sp,
+                                        color = colors.rescueContainerText,
+                                        lineHeight = 16.sp
                                     )
                                 }
                             }
@@ -1230,26 +1076,21 @@ fun RescueScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(RescueAmber.copy(alpha = 0.15f))
-                                    .border(0.5.dp, RescueAmber.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.rescue.copy(alpha = 0.12f))
+                                    .border(0.5.dp, colors.rescue.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(RescueAmber)
-                                    )
+                                    SoftStatusDot(color = colors.rescue, dotSize = 8.dp)
                                     Text(
-                                        text = "RECORDING SPEECH... (Release button or pause to send)",
+                                        text = "Recording… release or pause to send",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = RescueAmberText
+                                        color = colors.rescueContainerText
                                     )
                                 }
                             }
@@ -1264,25 +1105,24 @@ fun RescueScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(
                                         when {
-                                            isListening -> RescueAmber.copy(alpha = 0.15f)
-                                            isTranscribing -> BadgeMintContainer.copy(alpha = 0.6f)
-                                            isWarning -> if (colors.isDark) Color(0xFF451A03) else Color(0xFFFEF3C7)
-                                            colors.isDark -> Color(0xFF1E3A5F).copy(alpha = 0.6f)
-                                            else -> Color(0xFFEFF6FF)
+                                            isListening -> colors.rescue.copy(alpha = 0.12f)
+                                            isTranscribing -> colors.meshContainer.copy(alpha = 0.55f)
+                                            isWarning -> colors.rescueContainer
+                                            else -> colors.accentContainer.copy(alpha = 0.6f)
                                         }
                                     )
                                     .border(
                                         1.dp,
                                         when {
-                                            isListening -> RescueAmber.copy(alpha = 0.6f)
-                                            isTranscribing -> Color(0xFF059669).copy(alpha = 0.5f)
-                                            isWarning -> Color(0xFFF59E0B)
-                                            else -> AccentBlue.copy(alpha = 0.4f)
+                                            isListening -> colors.rescue.copy(alpha = 0.45f)
+                                            isTranscribing -> colors.mesh.copy(alpha = 0.4f)
+                                            isWarning -> colors.rescue.copy(alpha = 0.5f)
+                                            else -> colors.accent.copy(alpha = 0.3f)
                                         },
-                                        RoundedCornerShape(12.dp)
+                                        RoundedCornerShape(14.dp)
                                     )
                                     .padding(12.dp)
                             ) {
@@ -1293,33 +1133,24 @@ fun RescueScreen(
                                 ) {
                                     Text(
                                         text = if (isListening || isTranscribing || isWarning) currentTranscript
-                                               else "\"$currentTranscript\"",
+                                        else "\"$currentTranscript\"",
                                         fontSize = 13.sp,
-                                        fontWeight = if (isListening || isTranscribing) FontWeight.Bold else FontWeight.Medium,
+                                        fontWeight = if (isListening || isTranscribing) FontWeight.SemiBold else FontWeight.Medium,
                                         color = when {
-                                            isListening -> RescueAmberText
-                                            isTranscribing -> Color(0xFF065F46)
-                                            isWarning -> if (colors.isDark) Color(0xFFFDE68A) else Color(0xFF92400E)
-                                            colors.isDark -> Color(0xFFBFDBFE)
-                                            else -> Color(0xFF1E40AF)
+                                            isListening -> colors.rescueContainerText
+                                            isTranscribing -> colors.meshContainerText
+                                            isWarning -> colors.rescueContainerText
+                                            else -> colors.accentContainerText
                                         },
                                         lineHeight = 18.sp,
                                         modifier = Modifier.weight(1f)
                                     )
                                     if (!isListening && !isTranscribing && !isWarning) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(BadgeMintContainer)
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = "✓ SENT",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = BadgeMintText
-                                            )
-                                        }
+                                        SoftBadge(
+                                            text = "Sent",
+                                            containerColor = colors.badgeMintContainer,
+                                            contentColor = colors.badgeMintText
+                                        )
                                     }
                                 }
                             }
@@ -1328,22 +1159,22 @@ fun RescueScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(14.dp))
                                     .background(colors.cardSecondaryBg)
                                     .padding(12.dp)
                             ) {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(
-                                        text = "🎙️ Rescue Intercom Channel Ready",
+                                        text = "Rescue intercom channel ready",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = colors.textPrimary
                                     )
                                     Text(
                                         text = if (isModelInstalled)
-                                            "Hands-free voice active. Neural AI STT will transcribe and broadcast your speech to victims over mesh for instant TTS playback."
+                                            "Hands-free voice is active. Speech is transcribed and broadcast to victims over the mesh for instant playback."
                                         else
-                                            "Neural STT pack is not downloaded. Voice-to-text requires the offline language model in Model Hub.",
+                                            "The neural STT pack isn't downloaded yet. Voice-to-text needs the offline language model.",
                                         fontSize = 11.sp,
                                         color = colors.textSecondary,
                                         lineHeight = 15.sp
@@ -1357,7 +1188,7 @@ fun RescueScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(colors.cardSecondaryBg)
                                     .padding(horizontal = 10.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1367,18 +1198,18 @@ fun RescueScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(20.dp)
-                                        .clip(RoundedCornerShape(4.dp))
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(
-                                            if (msg.isLocal) AccentBlue.copy(alpha = 0.15f)
-                                            else RescueAmber.copy(alpha = 0.15f)
+                                            if (msg.isLocal) colors.accentContainer
+                                            else colors.rescueContainer
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = if (msg.isLocal) "↑" else "↓",
                                         fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (msg.isLocal) AccentBlue else RescueAmber
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (msg.isLocal) colors.accentContainerText else colors.rescueContainerText
                                     )
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
@@ -1390,7 +1221,7 @@ fun RescueScreen(
                                         maxLines = 3
                                     )
                                     Text(
-                                        text = if (msg.isLocal) "You • ${msg.senderCallsign}" else "Victim • ${msg.senderCallsign}",
+                                        text = if (msg.isLocal) "You · ${msg.senderCallsign}" else "Person · ${msg.senderCallsign}",
                                         fontSize = 10.sp,
                                         color = colors.textSecondary
                                     )
@@ -1401,12 +1232,12 @@ fun RescueScreen(
                 }
             }
             // =====================================================================
-            // 2. MINIMAL BRIGHT-THEME TACTICAL MAP CARD
+            // 2. SOFT TACTICAL MAP CARD
             // =====================================================================
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(22.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1426,23 +1257,17 @@ fun RescueScreen(
                                 .padding(end = 8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.accent)
-                                )
+                                SoftStatusDot(color = colors.accent, dotSize = 8.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "TACTICAL RESCUE MAP",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.8.sp,
+                                    text = "Tactical rescue map",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                             }
                             Text(
-                                text = "Real-time compass orientation • Tap anywhere to expand",
+                                text = "Live compass orientation · Tap anywhere to expand",
                                 fontSize = 11.sp,
                                 color = colors.textSecondary
                             )
@@ -1451,23 +1276,23 @@ fun RescueScreen(
                         // Expand Map Badge / Trigger
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(colors.cardSecondaryBg)
                                 .clickable { viewModel.toggleMapExpanded(true) }
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Fullscreen,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_expand,
                                     contentDescription = "Expand",
                                     tint = colors.accent,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Expand",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.accent,
                                     maxLines = 1
                                 )
@@ -1475,13 +1300,13 @@ fun RescueScreen(
                         }
                     }
 
-                    // Minimal Bright Vector Map Canvas
+                    // Soft Vector Map Canvas
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(230.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(if (colors.isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+                            .background(colors.background)
                             .border(1.dp, colors.outline, RoundedCornerShape(16.dp))
                             .clickable { viewModel.toggleMapExpanded(true) },
                         contentAlignment = Alignment.Center
@@ -1507,9 +1332,9 @@ fun RescueScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "HEADING: ${compassHeading.toInt()}° • ALL VICTIMS VISIBLE",
+                            text = "Heading: ${compassHeading.toInt()}° · Everyone visible",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.accent
                         )
                         Text(
@@ -1531,26 +1356,17 @@ fun RescueScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "DISTRESS BEACONS IN RANGE (${activeVictims.size})",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        color = colors.textSecondary
+                        text = "People in distress (${activeVictims.size})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(SosRedContainer)
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = "Vibrating on Alert",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SosRedDark
-                        )
-                    }
+                    SoftBadge(
+                        text = "Vibrating on alert",
+                        containerColor = colors.sosContainer,
+                        contentColor = colors.sosContainerText
+                    )
                 }
 
                 activeVictims.forEach { victim ->
@@ -1561,12 +1377,12 @@ fun RescueScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .shadow(elevation = 2.dp, shape = RoundedCornerShape(18.dp), spotColor = Color(0x08000000))
+                            .shadow(elevation = 3.dp, shape = RoundedCornerShape(18.dp), spotColor = colors.shadowTint)
                             .clip(RoundedCornerShape(18.dp))
                             .background(colors.surface)
                             .border(
                                 width = if (isThisVictimConnected) 2.dp else if (isThisVictimSelected) 1.5.dp else 1.dp,
-                                color = if (isThisVictimConnected) SosRed else if (isThisVictimSelected) AccentBlue else colors.outline,
+                                color = if (isThisVictimConnected) colors.error else if (isThisVictimSelected) colors.accent else colors.outline,
                                 shape = RoundedCornerShape(18.dp)
                             )
                             .clickable { viewModel.selectVictim(victim) }
@@ -1586,14 +1402,14 @@ fun RescueScreen(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(if (isThisVictimConnected) SosRedContainer else if (colors.isDark) Color(0xFF3B1219) else Color(0xFFFEE2E2)),
+                                        .background(colors.sosContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Warning,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_warning,
                                         contentDescription = null,
-                                        tint = SosRedDark,
-                                        modifier = Modifier.size(19.dp)
+                                        tint = colors.sosContainerText,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
 
@@ -1601,7 +1417,7 @@ fun RescueScreen(
                                     Text(
                                         text = victim.callsign,
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = colors.textPrimary
                                     )
                                     Row(
@@ -1609,14 +1425,14 @@ fun RescueScreen(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Text(
-                                            text = "~${victim.distanceMeters}m away" +
-                                                (victim.identityLabel?.let { " • $it" } ?: ""),
+                                            text = "~${victim.distanceMeters} m away" +
+                                                (victim.identityLabel?.let { " · $it" } ?: ""),
                                             fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = FontWeight.Medium,
                                             color = colors.accent
                                         )
                                         Text(
-                                            text = "•",
+                                            text = "·",
                                             fontSize = 11.sp,
                                             color = colors.textSecondary
                                         )
@@ -1633,70 +1449,72 @@ fun RescueScreen(
                                 Button(
                                     onClick = { viewModel.disconnectVictimIntercom() },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = SosRed,
-                                        contentColor = Color.White
+                                        containerColor = colors.error,
+                                        contentColor = colors.onAccent
                                     ),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PhoneDisabled,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_phone_off,
                                         contentDescription = null,
+                                        tint = colors.onAccent,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "End", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "End", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             } else if (someoneElseConnected) {
                                 Button(
                                     onClick = { viewModel.switchVictimIntercom(victim) },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (colors.isDark) Color(0xFF2E1C0C) else Color(0xFFFFFBEB),
-                                        contentColor = if (colors.isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
+                                        containerColor = colors.rescueContainer,
+                                        contentColor = colors.rescueContainerText
                                     ),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (colors.isDark) Color(0xFF78350F) else Color(0xFFFCD34D)),
-                                    shape = RoundedCornerShape(10.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, colors.rescue.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SwapHoriz,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_swap,
                                         contentDescription = null,
-                                        tint = if (colors.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
-                                        modifier = Modifier.size(16.dp)
+                                        tint = colors.rescueContainerText,
+                                        modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Switch", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Switch", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             } else {
                                 Button(
                                     onClick = { viewModel.connectVictimIntercom(victim) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = colors.accent,
-                                        contentColor = Color.White
+                                        contentColor = colors.onAccent
                                     ),
-                                    shape = RoundedCornerShape(10.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Phone,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_phone,
                                         contentDescription = null,
+                                        tint = colors.onAccent,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = "Connect", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(text = "Connect", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
                     }
                 }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
-    }
     }
 
     // =============================================================================
-    // FULLSCREEN INTERACTIVE BRIGHT TACTICAL MAP (Pinch-to-zoom, Pan, Compass)
+    // FULLSCREEN INTERACTIVE SOFT TACTICAL MAP (Pinch-to-zoom, Pan, Compass)
     // =============================================================================
     if (isMapExpanded) {
         Dialog(
@@ -1712,7 +1530,7 @@ fun RescueScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (colors.isDark) Color(0xFF0B0F19) else Color(0xFFF8FAFC))
+                    .background(colors.background)
             ) {
                 // 1. Solid Top App Bar covering the status bar and header
                 Surface(
@@ -1737,22 +1555,16 @@ fun RescueScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(colors.accent)
-                                    )
+                                    SoftStatusDot(color = colors.accent, dotSize = 8.dp)
                                     Text(
-                                        text = "TACTICAL RESCUE MAP",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 0.8.sp,
+                                        text = "Tactical rescue map",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = colors.textPrimary
                                     )
                                 }
                                 Text(
-                                    text = "Heading: ${compassHeading.toInt()}° • Pinch to Zoom / Drag to Pan",
+                                    text = "Heading: ${compassHeading.toInt()}° · Pinch to zoom, drag to pan",
                                     fontSize = 11.sp,
                                     color = colors.textSecondary,
                                     fontWeight = FontWeight.Medium
@@ -1769,11 +1581,11 @@ fun RescueScreen(
                                     .border(1.dp, colors.outline, CircleShape)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_close,
                                         contentDescription = "Close Map",
                                         tint = colors.textPrimary,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
@@ -1788,7 +1600,7 @@ fun RescueScreen(
                         .fillMaxWidth()
                         .clipToBounds()
                 ) {
-                    // Minimal Bright Vector Map Canvas
+                    // Soft Vector Map Canvas
                     MinimalBrightMapCanvas(
                         compassHeading = compassHeading,
                         victims = activeVictims,
@@ -1827,11 +1639,11 @@ fun RescueScreen(
                                 .border(1.dp, colors.outline, CircleShape)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_add,
                                     contentDescription = "Zoom In",
                                     tint = colors.textPrimary,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -1847,11 +1659,11 @@ fun RescueScreen(
                                 .border(1.dp, colors.outline, CircleShape)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Remove,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_minus,
                                     contentDescription = "Zoom Out",
                                     tint = colors.textPrimary,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -1870,11 +1682,11 @@ fun RescueScreen(
                                 .border(1.dp, colors.outline, CircleShape)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.MyLocation,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_locate,
                                     contentDescription = "Recenter",
                                     tint = colors.accent,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
@@ -1891,11 +1703,11 @@ fun RescueScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 16.dp)
                                 .align(Alignment.BottomCenter)
-                                .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp), spotColor = Color(0x15000000))
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(colors.surface)
-                            .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
-                            .padding(16.dp)
+                                .shadow(elevation = 8.dp, shape = RoundedCornerShape(20.dp), spotColor = colors.shadowTint)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(colors.surface)
+                                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
+                                .padding(16.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1911,14 +1723,14 @@ fun RescueScreen(
                                         modifier = Modifier
                                             .size(38.dp)
                                             .clip(CircleShape)
-                                            .background(if (isConnected) SosRedContainer else if (colors.isDark) Color(0xFF3B1219) else Color(0xFFFEE2E2)),
+                                            .background(colors.sosContainer),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Warning,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_warning,
                                             contentDescription = null,
-                                            tint = SosRedDark,
-                                            modifier = Modifier.size(19.dp)
+                                            tint = colors.sosContainerText,
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
 
@@ -1926,7 +1738,7 @@ fun RescueScreen(
                                         Text(
                                             text = victimToInspect.callsign,
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = colors.textPrimary
                                         )
                                         Row(
@@ -1934,14 +1746,14 @@ fun RescueScreen(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Text(
-                                                text = "~${victimToInspect.distanceMeters}m away" +
-                                                    (victimToInspect.identityLabel?.let { " • $it" } ?: ""),
+                                                text = "~${victimToInspect.distanceMeters} m away" +
+                                                    (victimToInspect.identityLabel?.let { " · $it" } ?: ""),
                                                 fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                fontWeight = FontWeight.Medium,
                                                 color = colors.accent
                                             )
                                             Text(
-                                                text = "•",
+                                                text = "·",
                                                 fontSize = 11.sp,
                                                 color = colors.textSecondary
                                             )
@@ -1957,57 +1769,59 @@ fun RescueScreen(
                                     Button(
                                         onClick = { viewModel.disconnectVictimIntercom() },
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = SosRed,
-                                            contentColor = Color.White
+                                            containerColor = colors.error,
+                                            contentColor = colors.onAccent
                                         ),
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.PhoneDisabled,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_phone_off,
                                             contentDescription = null,
+                                            tint = colors.onAccent,
                                             modifier = Modifier.size(15.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("End", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text("End", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                     }
                                 } else if (someoneElseConnected) {
                                     Button(
                                         onClick = { viewModel.switchVictimIntercom(victimToInspect) },
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (colors.isDark) Color(0xFF2E1C0C) else Color(0xFFFFFBEB),
-                                            contentColor = if (colors.isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
+                                            containerColor = colors.rescueContainer,
+                                            contentColor = colors.rescueContainerText
                                         ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, if (colors.isDark) Color(0xFF78350F) else Color(0xFFFCD34D)),
-                                        shape = RoundedCornerShape(10.dp),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.rescue.copy(alpha = 0.5f)),
+                                        shape = RoundedCornerShape(12.dp),
                                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.SwapHoriz,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_swap,
                                             contentDescription = null,
-                                            tint = if (colors.isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
-                                            modifier = Modifier.size(16.dp)
+                                            tint = colors.rescueContainerText,
+                                            modifier = Modifier.size(15.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Switch", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text("Switch", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                     }
                                 } else {
                                     Button(
                                         onClick = { viewModel.connectVictimIntercom(victimToInspect) },
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = colors.accent,
-                                            contentColor = Color.White
+                                            contentColor = colors.onAccent
                                         ),
-                                        shape = RoundedCornerShape(10.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Phone,
+                                        SoftIcon(
+                                            resId = R.drawable.ic_soft_phone,
                                             contentDescription = null,
+                                            tint = colors.onAccent,
                                             modifier = Modifier.size(15.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Connect", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text("Connect", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -2033,97 +1847,82 @@ fun RescueScreen(
 
     // Modal Bottom Sheet for All 10 Supported Indian Dialects
     if (showLanguageSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showLanguageSheet = false },
-            containerColor = colors.surface,
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        SoftSheetShell(
+            title = "Rescue language",
+            subtitle = "Pick the language for voice and transcription",
+            onDismiss = { showLanguageSheet = false }
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Select Rescuer Language",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    IconButton(onClick = { showLanguageSheet = false }) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = colors.textSecondary)
-                    }
-                }
-
-                OutlinedTextField(
-                    value = languageSearchQuery,
-                    onValueChange = { languageSearchQuery = it },
-                    placeholder = { Text("Search language or dialect...", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+            OutlinedTextField(
+                value = languageSearchQuery,
+                onValueChange = { languageSearchQuery = it },
+                placeholder = { Text("Search language or dialect…", fontSize = 13.sp, color = colors.textTertiary) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = SoftFieldShape,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.outline,
+                    focusedContainerColor = colors.cardSecondaryBg,
+                    unfocusedContainerColor = colors.cardSecondaryBg
                 )
+            )
 
-                val filtered = remember(languageSearchQuery) {
-                    if (languageSearchQuery.isBlank()) SupportedLanguage.entries
-                    else {
-                        val q = languageSearchQuery.trim().lowercase()
-                        SupportedLanguage.entries.filter {
-                            it.englishName.lowercase().contains(q) ||
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val filtered = remember(languageSearchQuery) {
+                if (languageSearchQuery.isBlank()) SupportedLanguage.entries
+                else {
+                    val q = languageSearchQuery.trim().lowercase()
+                    SupportedLanguage.entries.filter {
+                        it.englishName.lowercase().contains(q) ||
                             it.nativeName.lowercase().contains(q) ||
                             it.code.lowercase().contains(q)
-                        }
                     }
                 }
+            }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filtered) { lang ->
-                        val isSelected = selectedLanguage == lang
-                        val isInstalled = modelPacks.firstOrNull { it.iso == lang.code || it.languageTag.startsWith(lang.code) }?.isInstalled == true
-                        Surface(
-                            onClick = {
-                                viewModel.setSelectedLanguage(lang)
-                                showLanguageSheet = false
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) colors.accent.copy(alpha = 0.12f) else colors.cardSecondaryBg,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) colors.accent else colors.outline
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filtered) { lang ->
+                    val isSelected = selectedLanguage == lang
+                    val isInstalled = modelPacks.firstOrNull { it.iso == lang.code || it.languageTag.startsWith(lang.code) }?.isInstalled == true
+                    Surface(
+                        onClick = {
+                            viewModel.setSelectedLanguage(lang)
+                            showLanguageSheet = false
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) colors.accentContainer else colors.cardSecondaryBg,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) colors.accent.copy(alpha = 0.5f) else colors.outline
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "${lang.englishName} (${lang.nativeName})",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = if (isSelected) colors.accent else colors.textPrimary
-                                    )
-                                    Text(
-                                        text = if (isInstalled) "✓ Installed & Ready" else "Neural Pack: ${lang.downloadSizeMb} MB",
-                                        fontSize = 11.sp,
-                                        color = if (isInstalled) Color(0xFF059669) else colors.textSecondary
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = colors.accent)
-                                }
+                            Column {
+                                Text(
+                                    text = "${lang.englishName} (${lang.nativeName})",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = if (isSelected) colors.accentContainerText else colors.textPrimary
+                                )
+                                Text(
+                                    text = if (isInstalled) "Installed & ready" else "Neural pack · ${lang.downloadSizeMb} MB",
+                                    fontSize = 11.sp,
+                                    color = if (isInstalled) colors.meshContainerText else colors.textSecondary
+                                )
+                            }
+                            if (isSelected) {
+                                SoftStatusDot(color = colors.accent, dotSize = 8.dp)
                             }
                         }
                     }
@@ -2134,13 +1933,15 @@ fun RescueScreen(
 }
 
 /**
- * Minimal Bright-Theme Map Canvas:
- * - Crisp, bright off-white cartographic surface (no submarine theme!).
- * - Subtle road networks and city block geometry in light tones.
- * - Rotates dynamically with phone's real compass heading so rotating phone turns the map.
- * - Rescuer blue location puck at center with directional vision cone and subtle pulsing halo.
- * - All victims rendered directly as sleek modern pin markers with small floating cards ("SECTOR-4B • 14m").
+ * Soft tactical map canvas:
+ * - Warm off-white cartographic surface (deep-night variant in dark theme).
+ * - Subtle road networks and city block geometry in soft tones.
+ * - Rotates dynamically with the phone's real compass heading.
+ * - Soft indigo rescuer puck at center with directional vision cone and pulsing halo.
+ * - Victims rendered as soft pin markers with floating call sign/distance cards.
  * - Interactive tap selection for victim pins.
+ *
+ * NOTE: pin/badge geometry here must stay in sync with the tap hit-testing below.
  */
 @Composable
 fun MinimalBrightMapCanvas(
@@ -2233,12 +2034,12 @@ fun MinimalBrightMapCanvas(
             val cy = size.height / 2f + panOffset.y
             val maxRadius = minOf(size.width, size.height) * 0.42f * zoomScale
 
-            // 1. Bright / Dark Minimal Cartographic Background
-            drawRect(if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC))
+            // 1. Warm / Deep Minimal Cartographic Background
+            drawRect(colors.background)
 
             // 2. Subtle Cartographic Road / Street Grid Network (North-aligned tactical grid)
             val blockSize = 55.dp.toPx() * zoomScale
-            val blockColor = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+            val blockColor = colors.cardSecondaryBg
             for (ix in -4..4) {
                 for (iy in -4..4) {
                     if ((ix + iy) % 2 == 0) {
@@ -2256,8 +2057,8 @@ fun MinimalBrightMapCanvas(
 
             val roadWidth = 10.dp.toPx() * zoomScale
             val roadOutlineWidth = 12.dp.toPx() * zoomScale
-            val roadColor = if (isDark) Color(0xFF131D2E) else Color(0xFFFFFFFF)
-            val roadBorder = if (isDark) Color(0xFF2E3D52) else Color(0xFFE2E8F0)
+            val roadColor = if (isDark) Color(0xFF1A1D22) else Color.White
+            val roadBorder = colors.outline
 
             for (i in -3..3) {
                 val offsetVal = i * (blockSize + 16.dp.toPx() * zoomScale)
@@ -2293,7 +2094,7 @@ fun MinimalBrightMapCanvas(
         distanceSteps.forEach { (step, _) ->
             val r = maxRadius * step
             drawCircle(
-                color = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0),
+                color = colors.outline,
                 radius = r,
                 center = Offset(cx, cy),
                 style = Stroke(width = 1.dp.toPx())
@@ -2302,13 +2103,13 @@ fun MinimalBrightMapCanvas(
 
         // 4. Cardinal Compass Indicators on Map Boundary (N, E, S, W)
         val cardinalPaint = Paint().apply {
-            color = if (isDark) android.graphics.Color.parseColor("#94A3B8") else android.graphics.Color.parseColor("#64748B")
+            color = android.graphics.Color.parseColor("#837D73")
             textSize = 10.sp.toPx()
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
         val northPaint = Paint().apply {
-            color = android.graphics.Color.parseColor("#EF4444")
+            color = android.graphics.Color.parseColor("#EC6A5C")
             textSize = 11.sp.toPx()
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
@@ -2330,13 +2131,13 @@ fun MinimalBrightMapCanvas(
 
         // 5. Victim Map Pins & Small Floating Cards (True relative coordinates)
         val cardTextPaint = Paint().apply {
-            color = if (isDark) android.graphics.Color.parseColor("#F8FAFC") else android.graphics.Color.parseColor("#0F172A")
+            color = android.graphics.Color.parseColor("#211F1C")
             textSize = 10.sp.toPx()
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
         val cardDistPaint = Paint().apply {
-            color = if (isDark) android.graphics.Color.parseColor("#60A5FA") else android.graphics.Color.parseColor("#2563EB")
+            color = android.graphics.Color.parseColor("#7C7FE6")
             textSize = 9.sp.toPx()
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
@@ -2355,7 +2156,7 @@ fun MinimalBrightMapCanvas(
             // Selection/Connection outer glow
             if (isSelected || isConnected) {
                 drawCircle(
-                    color = if (isConnected) Color(0x35EF4444) else Color(0x352563EB),
+                    color = if (isConnected) colors.error.copy(alpha = 0.20f) else colors.accent.copy(alpha = 0.20f),
                     radius = 16.dp.toPx(),
                     center = Offset(vx, vy)
                 )
@@ -2363,12 +2164,12 @@ fun MinimalBrightMapCanvas(
 
             // Pin marker (border adapts to theme)
             drawCircle(
-                color = if (isDark) Color(0xFF0F172A) else Color.White,
+                color = if (isDark) colors.background else Color.White,
                 radius = 8.dp.toPx(),
                 center = Offset(vx, vy)
             )
             drawCircle(
-                color = if (isConnected) Color(0xFFEF4444) else if (isSelected) Color(0xFF0284C7) else Color(0xFFF43F5E),
+                color = if (isConnected) colors.sosDeep else if (isSelected) colors.accent else colors.error,
                 radius = 6.dp.toPx(),
                 center = Offset(vx, vy)
             )
@@ -2376,7 +2177,7 @@ fun MinimalBrightMapCanvas(
             // Small Floating Card above pin
             if (showCardLabels) {
                 val shortName = victim.callsign.replace("VICTIM-", "")
-                val labelText = "$shortName • ${victim.distanceMeters}m"
+                val labelText = "$shortName · ${victim.distanceMeters}m"
                 val textWidth = cardTextPaint.measureText(labelText)
                 val cardW = textWidth + 14.dp.toPx()
                 val cardH = 18.dp.toPx()
@@ -2384,16 +2185,20 @@ fun MinimalBrightMapCanvas(
                 val cardY = vy - 24.dp.toPx()
 
                 drawRoundRect(
-                    color = if (isDark) Color(0xFF1E293B) else Color.White,
+                    color = if (isDark) colors.surface else Color.White,
                     topLeft = Offset(cardX, cardY),
                     size = Size(cardW, cardH),
-                    cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
                 )
                 drawRoundRect(
-                    color = if (isConnected) Color(0xFFEF4444) else if (isSelected) (if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)) else (if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)),
+                    color = when {
+                        isConnected -> colors.error
+                        isSelected -> colors.accent
+                        else -> colors.outlineStrong
+                    },
                     topLeft = Offset(cardX, cardY),
                     size = Size(cardW, cardH),
-                    cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
                     style = Stroke(width = if (isConnected || isSelected) 1.5.dp.toPx() else 1.dp.toPx())
                 )
 
@@ -2408,7 +2213,7 @@ fun MinimalBrightMapCanvas(
 
         // 6. Rescuer GPS Location Puck at Center with rotating vision cone & chevron
         withTransform({
-            rotate(compassHeading, pivot = Offset(cx, cy))
+            rotate(currentCompassHeading, pivot = Offset(cx, cy))
         }) {
             val conePath = Path().apply {
                 moveTo(cx, cy)
@@ -2419,7 +2224,7 @@ fun MinimalBrightMapCanvas(
             drawPath(
                 path = conePath,
                 brush = Brush.verticalGradient(
-                    colors = listOf(Color(0x3338BDF8), Color(0x0038BDF8)),
+                    colors = listOf(colors.accent.copy(alpha = 0.20f), Color.Transparent),
                     startY = cy - 50.dp.toPx(),
                     endY = cy
                 )
@@ -2441,12 +2246,12 @@ fun MinimalBrightMapCanvas(
 
         // Center Rescuer Marker
         drawCircle(
-            color = Color(0xFF38BDF8).copy(alpha = 0.3f),
+            color = colors.accent.copy(alpha = 0.3f),
             radius = 12.dp.toPx(),
             center = Offset(cx, cy)
         )
         drawCircle(
-            color = Color(0xFF0284C7),
+            color = colors.accentDeep,
             radius = 6.dp.toPx(),
             center = Offset(cx, cy)
         )

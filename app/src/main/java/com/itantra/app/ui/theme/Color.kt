@@ -5,59 +5,93 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 // =========================================================================
-// iTantra Clean Tactical Bright Design System (Matching Reference UI)
-// Primary Accent: Electric Royal Blue #2563EB
-// High-visibility Emergency SOS: Crimson Red #EF4444
-// Background: Soft Bright Air #F8FAFC
+// iTantra "Soft Minimalism" Design System
+// Warm & airy surfaces, soft indigo accent, muted semantic colors.
+// Light mode: "Soft Day"  ·  Dark mode: "Soft Night"
+// Manrope typography · 22dp cards · hairline outlines · soft shadows
 // =========================================================================
 
-// Primary Brand & Accents
-val AccentBlue = Color(0xFF2563EB)
-val AccentBlueHover = Color(0xFF1D4ED8)
-val AccentBlueLight = Color(0xFF3B82F6)
-val AccentBlueContainer = Color(0xFFEFF6FF)
+// ---- Accent · Soft Indigo ------------------------------------------------
+val SoftIndigo = Color(0xFF7C7FE6)
+val SoftIndigoDeep = Color(0xFF5F62D1)
+val SoftIndigoLight = Color(0xFF9BA0EE)
+val SoftIndigoContainer = Color(0xFFEEEFFB)
+val SoftIndigoContainerText = Color(0xFF4A4C9E)
+val SoftIndigoContainerDark = Color(0xFF2B2D47)
+val SoftIndigoContainerDarkText = Color(0xFFC6C9F5)
 
-// Emergency Red (SOS)
-val SosRed = Color(0xFFEF4444)
-val SosRedDark = Color(0xFFDC2626)
-val SosRedLight = Color(0xFFF87171)
-val SosRedRing1 = Color(0x33EF4444)
-val SosRedRing2 = Color(0x1AEF4444)
-val SosRedContainer = Color(0xFFFEE2E2)
+// ---- SOS · Muted Coral ---------------------------------------------------
+val SoftCoral = Color(0xFFEC6A5C)
+val SoftCoralDeep = Color(0xFFD14F3D)
+val SoftCoralLight = Color(0xFFF08A7E)
+val SoftCoralContainer = Color(0xFFFCE8E4)
+val SoftCoralContainerText = Color(0xFFB04A3C)
+val SoftCoralContainerDark = Color(0xFF46302C)
+val SoftCoralContainerDarkText = Color(0xFFF5B3A9)
 
-// Status & Mesh Accents
-val MeshGreen = Color(0xFF10B981)
-val MeshGreenDark = Color(0xFF059669)
-val MeshGreenContainer = Color(0xFFECFDF5)
-val MeshGreenText = Color(0xFF047857)
+// ---- Rescue · Soft Apricot ------------------------------------------------
+val SoftApricot = Color(0xFFE8A33D)
+val SoftApricotDeep = Color(0xFFC98526)
+val SoftApricotLight = Color(0xFFEDB465)
+val SoftApricotContainer = Color(0xFFFBF0DC)
+val SoftApricotContainerText = Color(0xFF9A6E1F)
+val SoftApricotContainerDark = Color(0xFF443519)
+val SoftApricotContainerDarkText = Color(0xFFF3D4A0)
 
-val BadgeMintContainer = Color(0xFFDCFCE7)
-val BadgeMintText = Color(0xFF15803D)
+// ---- Mesh · Sage -----------------------------------------------------------
+val SoftSage = Color(0xFF5FAE87)
+val SoftSageDeep = Color(0xFF478F6C)
+val SoftSageLight = Color(0xFF85C4A6)
+val SoftSageContainer = Color(0xFFE6F2EB)
+val SoftSageContainerText = Color(0xFF3E7D5C)
+val SoftSageContainerDark = Color(0xFF2A3B33)
+val SoftSageContainerDarkText = Color(0xFFB7DECB)
 
-val BadgeIndigoContainer = Color(0xFFEEF2FF)
-val BadgeIndigoText = Color(0xFF4338CA)
+// ---- Soft Day (light) surfaces ---------------------------------------------
+val DayBackground = Color(0xFFFAF9F6)
+val DaySurface = Color(0xFFFFFFFF)
+val DaySurfaceAlt = Color(0xFFF3F1EC)
+val DayTextPrimary = Color(0xFF211F1C)
+val DayTextSecondary = Color(0xFF837D73)
+val DayTextTertiary = Color(0xFFA9A398)
+val DayOutline = Color(0xFFEAE6DE)
+val DayOutlineStrong = Color(0xFFDBD6CB)
+val DayShadow = Color(0x14211F1C)
 
-val RescueAmber = Color(0xFFF59E0B)
-val RescueAmberContainer = Color(0xFFFEF3C7)
-val RescueAmberText = Color(0xFFB45309)
+// ---- Soft Night (dark) surfaces --------------------------------------------
+val NightBackground = Color(0xFF16181D)
+val NightSurface = Color(0xFF1E2127)
+val NightSurfaceAlt = Color(0xFF262A31)
+val NightTextPrimary = Color(0xFFEDEBE8)
+val NightTextSecondary = Color(0xFF9C978D)
+val NightTextTertiary = Color(0xFF6F6B63)
+val NightOutline = Color(0xFF2E323A)
+val NightOutlineStrong = Color(0xFF3B404A)
+val NightShadow = Color(0x33000000)
 
-// Light Theme Palette (Default & Reference)
-val LightBackground = Color(0xFFF8FAFC)
-val LightSurface = Color(0xFFFFFFFF)
-val LightPrimaryText = Color(0xFF0F172A)
-val LightSecondaryText = Color(0xFF64748B)
-val LightOutline = Color(0xFFE2E8F0)
-val LightOutlineFocused = Color(0xFF3B82F6)
-val LightCardShadow = Color(0x080F172A)
+// ---- Badge tints ------------------------------------------------------------
+// Light
+val SoftBadgeMintContainer = Color(0xFFE3F2E8)
+val SoftBadgeMintText = Color(0xFF3E7D5C)
+val SoftBadgeIndigoContainer = Color(0xFFE8ECFB)
+val SoftBadgeIndigoText = Color(0xFF5761B8)
+val SoftBadgePurpleContainer = Color(0xFFEDE8F7)
+val SoftBadgePurpleText = Color(0xFF775BA6)
+val SoftBadgeAmberContainer = Color(0xFFF8EED9)
+val SoftBadgeAmberText = Color(0xFF96712A)
+// Dark
+val SoftBadgeMintContainerDark = Color(0xFF28362F)
+val SoftBadgeMintTextDark = Color(0xFF9CCDB0)
+val SoftBadgeIndigoContainerDark = Color(0xFF2B2F48)
+val SoftBadgeIndigoTextDark = Color(0xFFAAB4E8)
+val SoftBadgePurpleContainerDark = Color(0xFF343048)
+val SoftBadgePurpleTextDark = Color(0xFFC3B1E2)
+val SoftBadgeAmberContainerDark = Color(0xFF3E321D)
+val SoftBadgeAmberTextDark = Color(0xFFE8CD9A)
 
-// Dark Theme Palette (Fallback / Night Mode)
-val DarkBackground = Color(0xFF090D16)
-val DarkSurface = Color(0xFF131A29)
-val DarkPrimaryText = Color(0xFFF1F5F9)
-val DarkSecondaryText = Color(0xFF94A3B8)
-val DarkOutline = Color(0xFF1E293B)
-val DarkAccentContainer = Color(0xFF1E293B)
-
+// =========================================================================
+// Theme contract consumed by every screen.
+// =========================================================================
 @Immutable
 data class MinimalColors(
     val background: Color,
@@ -78,29 +112,48 @@ data class MinimalColors(
     val badgePurpleText: Color,
     val badgeAmberContainer: Color,
     val badgeAmberText: Color,
-    val isDark: Boolean
+    val isDark: Boolean,
+    // ---- Soft Minimalism extensions ----
+    val textTertiary: Color = textSecondary,
+    val outlineStrong: Color = outline,
+    val accentDeep: Color = accent,
+    val onAccent: Color = Color.White,
+    val accentContainerText: Color = accent,
+    val sos: Color = error,
+    val sosDeep: Color = error,
+    val sosContainer: Color = errorContainer,
+    val sosContainerText: Color = error,
+    val rescue: Color = SoftApricot,
+    val rescueDeep: Color = SoftApricotDeep,
+    val rescueContainer: Color = SoftApricotContainer,
+    val rescueContainerText: Color = SoftApricotContainerText,
+    val mesh: Color = SoftSage,
+    val meshDeep: Color = SoftSageDeep,
+    val meshContainer: Color = SoftSageContainer,
+    val meshContainerText: Color = SoftSageContainerText,
+    val shadowTint: Color = DayShadow
 )
 
 val LocalMinimalColors = staticCompositionLocalOf {
     MinimalColors(
-        background = LightBackground,
-        surface = LightSurface,
-        textPrimary = LightPrimaryText,
-        textSecondary = LightSecondaryText,
-        outline = LightOutline,
-        accent = AccentBlue,
-        accentContainer = AccentBlueContainer,
-        error = SosRed,
-        errorContainer = SosRedContainer,
-        cardSecondaryBg = Color(0xFFF1F5F9),
-        badgeMintContainer = Color(0xFFDCFCE7),
-        badgeMintText = Color(0xFF15803D),
-        badgeBlueContainer = Color(0xFFEFF6FF),
-        badgeBlueText = Color(0xFF1D4ED8),
-        badgePurpleContainer = Color(0xFFF3E8FF),
-        badgePurpleText = Color(0xFF7E22CE),
-        badgeAmberContainer = Color(0xFFFEF3C7),
-        badgeAmberText = Color(0xFFB45309),
+        background = DayBackground,
+        surface = DaySurface,
+        textPrimary = DayTextPrimary,
+        textSecondary = DayTextSecondary,
+        outline = DayOutline,
+        accent = SoftIndigo,
+        accentContainer = SoftIndigoContainer,
+        error = SoftCoral,
+        errorContainer = SoftCoralContainer,
+        cardSecondaryBg = DaySurfaceAlt,
+        badgeMintContainer = SoftBadgeMintContainer,
+        badgeMintText = SoftBadgeMintText,
+        badgeBlueContainer = SoftBadgeIndigoContainer,
+        badgeBlueText = SoftBadgeIndigoText,
+        badgePurpleContainer = SoftBadgePurpleContainer,
+        badgePurpleText = SoftBadgePurpleText,
+        badgeAmberContainer = SoftBadgeAmberContainer,
+        badgeAmberText = SoftBadgeAmberText,
         isDark = false
     )
 }
@@ -110,3 +163,82 @@ val MinimalColorsInstance: MinimalColors
     @androidx.compose.runtime.ReadOnlyComposable
     get() = LocalMinimalColors.current
 
+// =========================================================================
+// Legacy token aliases — old "Clean Tactical Bright" names kept pointing at
+// their Soft Minimalism replacements so unrestyled screens keep compiling
+// and instantly inherit the softer palette. Removed as screens are restyled.
+// =========================================================================
+@Deprecated("Use SoftIndigo", ReplaceWith("SoftIndigo"))
+val AccentBlue = SoftIndigo
+@Deprecated("Use SoftIndigoDeep", ReplaceWith("SoftIndigoDeep"))
+val AccentBlueHover = SoftIndigoDeep
+@Deprecated("Use SoftIndigoLight", ReplaceWith("SoftIndigoLight"))
+val AccentBlueLight = SoftIndigoLight
+@Deprecated("Use SoftIndigoContainer", ReplaceWith("SoftIndigoContainer"))
+val AccentBlueContainer = SoftIndigoContainer
+
+@Deprecated("Use SoftCoral", ReplaceWith("SoftCoral"))
+val SosRed = SoftCoral
+@Deprecated("Use SoftCoralDeep", ReplaceWith("SoftCoralDeep"))
+val SosRedDark = SoftCoralDeep
+@Deprecated("Use SoftCoralLight", ReplaceWith("SoftCoralLight"))
+val SosRedLight = SoftCoralLight
+@Deprecated("Use derived alpha of SoftCoral")
+val SosRedRing1 = Color(0x33EC6A5C)
+@Deprecated("Use derived alpha of SoftCoral")
+val SosRedRing2 = Color(0x1AEC6A5C)
+@Deprecated("Use SoftCoralContainer", ReplaceWith("SoftCoralContainer"))
+val SosRedContainer = SoftCoralContainer
+
+@Deprecated("Use SoftSage", ReplaceWith("SoftSage"))
+val MeshGreen = SoftSage
+@Deprecated("Use SoftSageDeep", ReplaceWith("SoftSageDeep"))
+val MeshGreenDark = SoftSageDeep
+@Deprecated("Use SoftSageContainer", ReplaceWith("SoftSageContainer"))
+val MeshGreenContainer = SoftSageContainer
+@Deprecated("Use SoftSageContainerText", ReplaceWith("SoftSageContainerText"))
+val MeshGreenText = SoftSageContainerText
+
+@Deprecated("Use SoftBadgeMintContainer", ReplaceWith("SoftBadgeMintContainer"))
+val BadgeMintContainer = SoftBadgeMintContainer
+@Deprecated("Use SoftBadgeMintText", ReplaceWith("SoftBadgeMintText"))
+val BadgeMintText = SoftBadgeMintText
+@Deprecated("Use SoftBadgeIndigoContainer", ReplaceWith("SoftBadgeIndigoContainer"))
+val BadgeIndigoContainer = SoftBadgeIndigoContainer
+@Deprecated("Use SoftBadgeIndigoText", ReplaceWith("SoftBadgeIndigoText"))
+val BadgeIndigoText = SoftBadgeIndigoText
+
+@Deprecated("Use SoftApricot", ReplaceWith("SoftApricot"))
+val RescueAmber = SoftApricot
+@Deprecated("Use SoftApricotContainer", ReplaceWith("SoftApricotContainer"))
+val RescueAmberContainer = SoftApricotContainer
+@Deprecated("Use SoftApricotContainerText", ReplaceWith("SoftApricotContainerText"))
+val RescueAmberText = SoftApricotContainerText
+
+@Deprecated("Use DayBackground", ReplaceWith("DayBackground"))
+val LightBackground = DayBackground
+@Deprecated("Use DaySurface", ReplaceWith("DaySurface"))
+val LightSurface = DaySurface
+@Deprecated("Use DayTextPrimary", ReplaceWith("DayTextPrimary"))
+val LightPrimaryText = DayTextPrimary
+@Deprecated("Use DayTextSecondary", ReplaceWith("DayTextSecondary"))
+val LightSecondaryText = DayTextSecondary
+@Deprecated("Use DayOutline", ReplaceWith("DayOutline"))
+val LightOutline = DayOutline
+@Deprecated("Use SoftIndigo", ReplaceWith("SoftIndigo"))
+val LightOutlineFocused = SoftIndigo
+@Deprecated("Use DayShadow", ReplaceWith("DayShadow"))
+val LightCardShadow = DayShadow
+
+@Deprecated("Use NightBackground", ReplaceWith("NightBackground"))
+val DarkBackground = NightBackground
+@Deprecated("Use NightSurface", ReplaceWith("NightSurface"))
+val DarkSurface = NightSurface
+@Deprecated("Use NightTextPrimary", ReplaceWith("NightTextPrimary"))
+val DarkPrimaryText = NightTextPrimary
+@Deprecated("Use NightTextSecondary", ReplaceWith("NightTextSecondary"))
+val DarkSecondaryText = NightTextSecondary
+@Deprecated("Use NightOutline", ReplaceWith("NightOutline"))
+val DarkOutline = NightOutline
+@Deprecated("Use SoftIndigoContainerDark", ReplaceWith("SoftIndigoContainerDark"))
+val DarkAccentContainer = SoftIndigoContainerDark

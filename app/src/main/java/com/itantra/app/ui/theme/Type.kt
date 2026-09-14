@@ -1,93 +1,131 @@
-﻿package com.itantra.app.ui.theme
+package com.itantra.app.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.itantra.app.R
 
 // =========================================================================
-// MINIMAL TYPOGRAPHY SYSTEM
-// Single font family: System Sans-Serif (Google Sans / Roboto)
-// Max 4 font sizes: 28sp (Screen title), 18sp (Section header),
-//                   15sp (Body text), 13sp (Caption/meta).
-// Max 2 weights: Regular (400) and Medium (500).
+// SOFT MINIMALISM TYPOGRAPHY
+// Family: Manrope (SIL Open Font License 1.1 — fonts.google.com/specimen/Manrope)
+// Bundled as a variable font; weights 400–700 via variation settings.
+// Scale: 28sp titles · 18sp sections · 15sp body · 13/12sp labels.
 // =========================================================================
 
-val Typography = Typography(
-    // Screen Title: 28sp, Medium weight
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.4).sp
+@OptIn(ExperimentalTextApi::class)
+val Manrope = FontFamily(
+    Font(
+        R.font.manrope_variable,
+        weight = FontWeight.Normal,
+        variationSettings = FontVariation.Settings(FontVariation.weight(400))
     ),
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.4).sp
+    Font(
+        R.font.manrope_variable,
+        weight = FontWeight.Medium,
+        variationSettings = FontVariation.Settings(FontVariation.weight(500))
     ),
-    // Section Header: 18sp, Medium weight
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = (-0.2).sp
+    Font(
+        R.font.manrope_variable,
+        weight = FontWeight.SemiBold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(600))
     ),
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = (-0.2).sp
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 15.sp,
-        lineHeight = 22.sp
-    ),
-    // Body Text: 15sp, Regular weight
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp
-    ),
-    // Caption / Meta: 13sp, Regular weight
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
-    ),
-    labelLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp
+    Font(
+        R.font.manrope_variable,
+        weight = FontWeight.Bold,
+        variationSettings = FontVariation.Settings(FontVariation.weight(700))
     )
 )
 
+val Typography = Typography(
+    // Screen title: 28sp SemiBold
+    displayLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 28.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.5).sp
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 28.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.5).sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.4).sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
+        letterSpacing = (-0.2).sp
+    ),
+    // Section header: 18sp SemiBold
+    titleLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 26.sp,
+        letterSpacing = (-0.2).sp
+    ),
+    // Card title: 15sp SemiBold
+    titleMedium = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
+        lineHeight = 22.sp
+    ),
+    // Body: 15sp Regular
+    bodyLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.Normal,
+        fontSize = 15.sp,
+        lineHeight = 23.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.Normal,
+        fontSize = 15.sp,
+        lineHeight = 23.sp
+    ),
+    // Secondary body: 13sp Regular
+    bodySmall = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 19.sp
+    ),
+    // Emphasised label: 13sp SemiBold
+    labelLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.1.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.1.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.1.sp
+    )
+)

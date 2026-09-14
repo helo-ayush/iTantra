@@ -1,22 +1,14 @@
 package com.itantra.app.ui.components
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -26,13 +18,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itantra.app.ui.theme.MinimalColorsInstance
 
 /**
- * Modern, crisp vector battery indicator that replaces raw battery emojis across the app.
- * Renders a sleek micro-battery shell with dynamic fill bar and color coding:
- *  - >50%: Emerald Green
- *  - 20-50%: Amber Warning
- *  - <20%: Critical Red
+ * Soft vector battery indicator: rounded micro-shell with proportional fill.
+ *  - >50%: sage green   ·  20-50%: apricot   ·  <20%: coral (critical)
  */
 @Composable
 fun BatteryIndicator(
@@ -40,14 +30,16 @@ fun BatteryIndicator(
     modifier: Modifier = Modifier,
     showText: Boolean = true,
     heightDp: Dp = 12.dp,
-    textColor: Color = Color(0xFF475569)
+    textColor: Color = MinimalColorsInstance.textSecondary
 ) {
+    val colors = MinimalColorsInstance
     val level = batteryPercent.coerceIn(0, 100)
     val batteryColor = when {
-        level > 50 -> Color(0xFF10B981) // Emerald Green
-        level >= 20 -> Color(0xFFF59E0B) // Amber
-        else -> Color(0xFFEF4444) // Critical Red
+        level > 50 -> colors.mesh
+        level >= 20 -> colors.rescue
+        else -> colors.error
     }
+    val shellColor = colors.textTertiary
 
     val shellWidth = heightDp * 1.8f
     val shellHeight = heightDp
@@ -65,7 +57,7 @@ fun BatteryIndicator(
 
             // Outer battery body outline
             drawRoundRect(
-                color = Color(0xFF94A3B8),
+                color = shellColor,
                 topLeft = Offset(0f, 0f),
                 size = Size(shellWidth.toPx(), shellHeight.toPx()),
                 cornerRadius = CornerRadius(radius, radius),
@@ -76,7 +68,7 @@ fun BatteryIndicator(
             val capX = shellWidth.toPx() + 1.dp.toPx()
             val capY = (shellHeight.toPx() - capHeight.toPx()) / 2f
             drawRoundRect(
-                color = Color(0xFF94A3B8),
+                color = shellColor,
                 topLeft = Offset(capX, capY),
                 size = Size(capWidth.toPx(), capHeight.toPx()),
                 cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
@@ -103,7 +95,8 @@ fun BatteryIndicator(
                 text = "$level%",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = textColor
+                color = textColor,
+                modifier = Modifier.padding(0.dp)
             )
         }
     }

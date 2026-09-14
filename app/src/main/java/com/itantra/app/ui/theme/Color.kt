@@ -118,6 +118,7 @@ data class MinimalColors(
     val outlineStrong: Color = outline,
     val accentDeep: Color = accent,
     val onAccent: Color = Color.White,
+    val onError: Color = Color.White,
     val accentContainerText: Color = accent,
     val sos: Color = error,
     val sosDeep: Color = error,

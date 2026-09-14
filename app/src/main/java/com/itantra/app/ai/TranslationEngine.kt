@@ -31,6 +31,10 @@ class TranslationEngine(
     @Volatile
     private var mlKitModelsReady: Boolean = false
 
+    /** Latch that disables ML Kit after a corrupt or partial model is detected. */
+    @Volatile
+    private var mlKitDisabledUntilRedownload: Boolean = false
+
     // Google ML Kit Neural Translators (safe against host JVM / no context)
     private val hiToEnTranslator: Translator? by lazy {
         try {
@@ -364,6 +368,7 @@ class TranslationEngine(
                     enClient.downloadModelIfNeeded(conditions)
                         .addOnSuccessListener {
                             mlKitModelsReady = true
+                            mlKitDisabledUntilRedownload = false
                             try { Log.i(TAG, "Google ML Kit Hindi & English models ready for offline use") } catch (_: Throwable) {}
                             onSuccess()
                         }
@@ -431,7 +436,31 @@ class TranslationEngine(
         return dir.exists() && dir.isDirectory
     }
 
-    private val bgExecutor = Executors.newCachedThreadPool()
+    private val bgExecutor = Executors.newFixedThreadPool(2)
+
+    /**
+     * Records an ML Kit translate failure. If the model files are missing or
+     * corrupt (interrupted download), latch ML Kit off so later calls go straight
+     * to the dictionary fallback instead of re-entering failing native code that
+     * churns memory and can get the process OOM-killed.
+     */
+    private fun markMlKitFailure(t: Throwable) {
+        var cur: Throwable? = t
+        while (cur != null) {
+            if (cur is com.google.mlkit.common.MlKitException) {
+                mlKitDisabledUntilRedownload = true
+                mlKitModelsReady = false
+                try { Log.w(TAG, "ML Kit model corrupt or partial - disabling ML Kit until re-download") } catch (_: Throwable) {}
+                return
+            }
+            cur = cur.cause
+        }
+        if (t.message?.contains("model files not found", ignoreCase = true) == true) {
+            mlKitDisabledUntilRedownload = true
+            mlKitModelsReady = false
+            try { Log.w(TAG, "ML Kit model files not found - disabling ML Kit until re-download") } catch (_: Throwable) {}
+        }
+    }
 
     /**
      * Translates text bidirectionally between Hindi and English.
@@ -450,47 +479,61 @@ class TranslationEngine(
 
         if (from == to) return trimmed
 
-        // 1. Primary: Google ML Kit On-Device Neural Machine Translation
-        try {
-            val translator = when {
-                from == "hi" && to == "en" -> hiToEnTranslator
-                from == "en" && to == "hi" -> enToHiTranslator
-                else -> null
-            }
-            if (translator != null) {
-                val task = translator.translate(trimmed)
-                val isMainThread = try {
-                    android.os.Looper.myLooper() != null && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
-                } catch (_: Throwable) {
-                    false
+        // 1. Primary: Google ML Kit On-Device Neural Machine Translation.
+        // Skips ML Kit entirely once a corrupt/partial model was detected so a
+        // failed native load cannot run in a hot loop and OOM-kill the process.
+        if (!mlKitDisabledUntilRedownload) {
+            try {
+                val translator = when {
+                    from == "hi" && to == "en" -> hiToEnTranslator
+                    from == "en" && to == "hi" -> enToHiTranslator
+                    else -> null
                 }
+                if (translator != null) {
+                    val task = translator.translate(trimmed)
+                    val isMainThread = try {
+                        android.os.Looper.myLooper() != null && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()
+                    } catch (_: Throwable) {
+                        false
+                    }
 
-                val mlResult: String? = if (isMainThread) {
-                    var backgroundResult: String? = null
-                    val latch = java.util.concurrent.CountDownLatch(1)
-                    bgExecutor.execute {
+                    val mlResult: String? = if (isMainThread) {
+                        var backgroundResult: String? = null
+                        var backgroundFailure: Throwable? = null
+                        val latch = java.util.concurrent.CountDownLatch(1)
+                        bgExecutor.execute {
+                            try {
+                                backgroundResult = Tasks.await(task, 2500, TimeUnit.MILLISECONDS)
+                            } catch (t: Throwable) {
+                                backgroundFailure = t
+                                try { Log.w(TAG, "ML Kit task: ${t.message}") } catch (_: Throwable) {}
+                            } finally {
+                                latch.countDown()
+                            }
+                        }
+                        latch.await(2500, TimeUnit.MILLISECONDS)
+                        if (backgroundFailure != null) markMlKitFailure(backgroundFailure)
+                        backgroundResult
+                    } else {
                         try {
-                            backgroundResult = Tasks.await(task, 2500, TimeUnit.MILLISECONDS)
+                            Tasks.await(task, 2500, TimeUnit.MILLISECONDS)
                         } catch (t: Throwable) {
-                            try { Log.w(TAG, "ML Kit task: ${t.message}") } catch (_: Throwable) {}
-                        } finally {
-                            latch.countDown()
+                            markMlKitFailure(t)
+                            null
                         }
                     }
-                    latch.await(2500, TimeUnit.MILLISECONDS)
-                    backgroundResult
-                } else {
-                    Tasks.await(task, 2500, TimeUnit.MILLISECONDS)
-                }
 
-                if (!mlResult.isNullOrBlank()) {
-                    mlKitModelsReady = true
-                    try { Log.i(TAG, "Google ML Kit translated [$from -> $to]: '$trimmed' -> '$mlResult'") } catch (_: Throwable) {}
-                    return cleanWhitespace(mlResult)
+                    if (!mlResult.isNullOrBlank()) {
+                        mlKitModelsReady = true
+                        mlKitDisabledUntilRedownload = false
+                        try { Log.i(TAG, "Google ML Kit translated [$from -> $to]: '$trimmed' -> '$mlResult'") } catch (_: Throwable) {}
+                        return cleanWhitespace(mlResult)
+                    }
                 }
+            } catch (t: Throwable) {
+                markMlKitFailure(t)
+                try { Log.w(TAG, "ML Kit translation fallback for '$trimmed': ${t.message}") } catch (_: Throwable) {}
             }
-        } catch (t: Throwable) {
-            try { Log.w(TAG, "ML Kit translation fallback for '$trimmed': ${t.message}") } catch (_: Throwable) {}
         }
 
         // 2. Deterministic offline dictionary fallback

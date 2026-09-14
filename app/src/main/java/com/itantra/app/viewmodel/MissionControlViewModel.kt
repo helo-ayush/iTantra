@@ -280,7 +280,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         if (translationEngine.isInstalled()) {
             _isTranslationModelInstalled.value = true
             _translationDownloadState.value = ModelDownloadState.Installed
-            checkCrossLingualStatus()
+            // Deferred: checkCrossLingualStatus() reads StateFlow fields that are
+            // declared LATER in this constructor (e.g. _connectedVictimIntercom,
+            // _connectedRescuer, _pairedWalkieDevices). Calling it synchronously here
+            // NPEs on cold start after the NMT model is installed. Post it to run
+            // after construction completes.
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                checkCrossLingualStatus()
+            }
         }
 
         viewModelScope.launch {

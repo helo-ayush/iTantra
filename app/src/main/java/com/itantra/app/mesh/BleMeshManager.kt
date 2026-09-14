@@ -278,10 +278,13 @@ class BleMeshManager(context: Context) {
 
         /**
          * Minimum gap between two real advertisement restarts that only refresh
-         * volatile telemetry (coordinates / battery). Volatile churn must never
-         * take the beacon off the air, so restarts are throttled to this cadence.
+         * volatile telemetry (coordinates / battery). Aligned with the
+         * ViewModel's [com.itantra.app.viewmodel.MissionControlViewModel]
+         * `BEACON_POSITION_REFRESH_MS` push gate so a pushed position refresh
+         * is never silently swallowed here. Volatile churn must never take the
+         * beacon off the air, so restarts are throttled to this cadence.
          */
-        private const val ADVERT_REFRESH_MIN_INTERVAL_MS = 15_000L
+        private const val ADVERT_REFRESH_MIN_INTERVAL_MS = 10_000L
 
         /** Bounded advertise-start retry schedule after a controller failure. */
         private const val ADVERTISE_MAX_RETRIES = 5
@@ -834,29 +837,46 @@ class BleMeshManager(context: Context) {
     // ADVERTISER — distress beacon transmission
     // =========================================================================
 
+    // All of the advertise/scan state below is read and written from three
+    // thread domains at once: binder threads (AdvertiseCallback/ScanCallback),
+    // the Default-dispatcher retry/watchdog coroutines, and app entry points.
+    // @Volatile guarantees every domain observes the latest desired-state
+    // flags — a stale read here is exactly a "radio loop that never recovers".
+
     /** The newest beacon the app wants on the air (may differ from [onAirBeacon]). */
+    @Volatile
     private var requestedBeacon: DistressBeaconPayload? = null
 
     /** TX power to use for the next real advertise (re)start. */
+    @Volatile
     private var requestedTxPower: BeaconTxPower = BeaconTxPower.HIGH
 
     /** True while some mode wants the beacon advertised. */
+    @Volatile
     private var advertiseRequested = false
 
     /** The payload currently confirmed (or optimistically) on the air. */
+    @Volatile
     private var onAirBeacon: DistressBeaconPayload? = null
 
     /** When the radio was last actually (re)started. */
+    @Volatile
     private var lastAdvertiseRestartEpochMs = 0L
 
+    @Volatile
     private var advertiseRetryJob: Job? = null
+    @Volatile
     private var advertiseRetryAttempts = 0
+    @Volatile
     private var advertiseWatchdogJob: Job? = null
 
     private val advertiseCallback: AdvertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
             _isAdvertising.value = true
             advertiseRetryAttempts = 0
+            // A real start succeeded: any retry still pending is obsolete.
+            advertiseRetryJob?.cancel()
+            advertiseRetryJob = null
             onAirBeacon = requestedBeacon
             Log.i("BleMeshManager", "BLE beacon advertising started successfully")
         }
@@ -904,16 +924,22 @@ class BleMeshManager(context: Context) {
     }
 
     /**
-     * Periodically re-asserts the beacon so a controller that silently stopped
-     * advertising (no failure callback) heals itself. Bounded cadence, so this
-     * is not the per-tick churn the app used to have.
+     * Periodically verifies the beacon is still up and re-asserts it when the
+     * state says otherwise. Heal-only by design: it must never force-restart a
+     * healthy advert, because repeated forced stop+start cycles are exactly
+     * the churn that trips some controllers into the terminal failure states
+     * the retry paths exist to recover from. Failures reported via
+     * [advertiseCallback] are healed by [scheduleAdvertiseRetry].
      */
     private fun startAdvertiseWatchdog() {
         if (advertiseWatchdogJob?.isActive == true) return
         advertiseWatchdogJob = scope.launch {
             while (isActive) {
                 delay(ADVERT_WATCHDOG_PERIOD_MS)
-                if (advertiseRequested) applyAdvertising(force = true)
+                if (advertiseRequested && !_isAdvertising.value) {
+                    Log.w("BleMeshManager", "Advertise watchdog: beacon not active, re-asserting")
+                    applyAdvertising(force = true)
+                }
             }
         }
     }
@@ -1042,10 +1068,14 @@ class BleMeshManager(context: Context) {
     // =========================================================================
 
     /** True while some mode wants scanning active. */
+    @Volatile
     private var scanRequested = false
 
+    @Volatile
     private var scanRetryJob: Job? = null
+    @Volatile
     private var scanRetryAttempts = 0
+    @Volatile
     private var scanWatchdogJob: Job? = null
 
     private val scanCallback = object : ScanCallback() {
@@ -1149,6 +1179,9 @@ class BleMeshManager(context: Context) {
             scanner.startScan(listOf(anyFilter), settings, scanCallback)
             _isScanning.value = true
             scanRetryAttempts = 0
+            // A real start succeeded: any retry still pending is obsolete.
+            scanRetryJob?.cancel()
+            scanRetryJob = null
             Log.i("BleMeshManager", "BLE scanner started")
             if (pruneJob?.isActive != true) startPruning()
             true

@@ -531,8 +531,66 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    // --- Beacon push gate (anti-churn) ---
+    // Every GPS tick produces a payload with fresh lat/lon; pushing it to the
+    // BLE advertiser would tear down and restart the advert ~1 Hz, which is
+    // the churn that trips controllers into terminal scan/advertise failure.
+    // pushBeaconPayload lets position-only changes through at most once per
+    // BEACON_POSITION_REFRESH_MS and everything semantic immediately.
+
+    /** The beacon payload last actually pushed to the advertiser. */
+    private var lastAdvertisedBeacon: DistressBeaconPayload? = null
+
+    /** When [lastAdvertisedBeacon] was pushed. */
+    private var lastAdvertRestartEpochMs = 0L
+
+    /**
+     * Decides whether [payload] must really go to the advertiser. Returns true
+     * for semantic changes (nodeId, battery, altitude sentinel, language,
+     * distress flag) and for the first push; position-only changes are
+     * throttled to one push per [BEACON_POSITION_REFRESH_MS]. Coordinates keep
+     * full precision — the throttle, not quantization, handles GPS jitter.
+     */
+    private fun pushBeaconPayload(payload: DistressBeaconPayload): Boolean {
+        val now = System.currentTimeMillis()
+        val prev = lastAdvertisedBeacon ?: return pushNow(payload, now)
+        val semanticSame = prev.nodeId == payload.nodeId &&
+            prev.batteryPercent == payload.batteryPercent &&
+            prev.altitudeMeters == payload.altitudeMeters &&
+            prev.languageIso == payload.languageIso &&
+            prev.isDistress == payload.isDistress
+        if (semanticSame &&
+            prev.latitudeDeg == payload.latitudeDeg && prev.longitudeDeg == payload.longitudeDeg
+        ) {
+            return false  // nothing changed at all
+        }
+        if (semanticSame && now - lastAdvertRestartEpochMs < BEACON_POSITION_REFRESH_MS) {
+            return false  // only GPS jitter; throttle position-only advert churn
+        }
+        return pushNow(payload, now)
+    }
+
+    private fun pushNow(payload: DistressBeaconPayload, now: Long): Boolean {
+        lastAdvertisedBeacon = payload
+        lastAdvertRestartEpochMs = now
+        return true
+    }
+
+    /**
+     * Clears the push gate so the next beacon start is always pushed. Used
+     * wherever the radio lost state the gate cannot see: after a stop (spec:
+     * next start always pushes), after the Bluetooth adapter died and came
+     * back, and for tx-power changes (tx power is not part of the payload, so
+     * the gate cannot detect it).
+     */
+    private fun forceBeaconRepublish() {
+        lastAdvertisedBeacon = null
+        lastAdvertRestartEpochMs = 0L
+    }
+
     /** Starts foreground keeper service and initiates BLE beacon advertising. */
     private fun startBeaconAdvertising(payload: DistressBeaconPayload) {
+        if (!pushBeaconPayload(payload)) return
         val power = currentBeaconTxPower()
         try {
             TacticalMeshService.start(getApplication(), payload, power)
@@ -548,6 +606,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         } catch (_: Exception) {
         }
         bleMeshManager?.stopAdvertising()
+        forceBeaconRepublish()
     }
 
     /** Non-distress presence beacon advertised while Walkie Mesh is on. */
@@ -576,10 +635,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             !_bluetoothEnabled.value -> stopBeaconAdvertising()
             _isSosBroadcasting.value -> startBeaconAdvertising(buildDistressBeaconPayload())
             _isRescueActive.value -> startRescuerBeaconAdvertising()
-            _isWalkieActive.value -> bleMeshManager?.startAdvertising(
-                buildWalkieBeaconPayload(),
-                currentBeaconTxPower()
-            )
+            _isWalkieActive.value -> {
+                // Same push gate as SOS/Rescue: walkie presence beacons embed
+                // live coordinates too, so syncs must not churn the advertiser.
+                val walkiePayload = buildWalkieBeaconPayload()
+                if (pushBeaconPayload(walkiePayload)) {
+                    bleMeshManager?.startAdvertising(walkiePayload, currentBeaconTxPower())
+                }
+            }
             else -> stopBeaconAdvertising()
         }
         syncProfileBroadcast()
@@ -708,6 +771,9 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         // A globally disabled Bluetooth radio stays off even after the adapter
         // comes back — Wi-Fi Direct carries everything until the user re-enables it.
         if (!_bluetoothEnabled.value) return
+        // The adapter dying killed the on-air advert without a push-gated stop,
+        // so force the next start through the gate and re-assert the beacon.
+        forceBeaconRepublish()
         if (_isSosBroadcasting.value) {
             startBeaconAdvertising(buildDistressBeaconPayload())
             bleMeshManager?.startScanning()
@@ -1084,7 +1150,9 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     private fun startRescuerBeaconAdvertising() {
         val payload = buildRescuerBeaconPayload()
-        bleMeshManager?.startAdvertising(payload, BeaconTxPower.HIGH)
+        if (pushBeaconPayload(payload)) {
+            bleMeshManager?.startAdvertising(payload, BeaconTxPower.HIGH)
+        }
     }
 
     private fun buildRescuerBeaconPayload(): DistressBeaconPayload {
@@ -3364,6 +3432,9 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     fun setTxPower(power: String) {
         _txPower.value = power
         viewModelScope.launch { settingsRepository.setTxPower(power) }
+        // Tx power is not part of the payload, so the push gate cannot detect
+        // it: force the next advert start so the new power applies immediately.
+        forceBeaconRepublish()
         if (_isSosBroadcasting.value) {
             startBeaconAdvertising(buildDistressBeaconPayload())
         }
@@ -3947,8 +4018,12 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         /** Re-advertise once the device has moved at least this far (meters). */
         const val BEACON_POSITION_REFRESH_METERS = 10f
 
-        /** ...or at least this often even when stationary (milliseconds). */
-        const val BEACON_POSITION_REFRESH_MS = 15_000L
+        /**
+         * Only GPS-position changes are throttled to this cadence; semantic
+         * changes (target mask on connect/disconnect/broadcast-all, distress
+         * flag, language, tx power) push immediately.
+         */
+        const val BEACON_POSITION_REFRESH_MS = 10_000L
 
         /**
          * After an explicit disconnect, both sides suppress auto-lock (from

@@ -662,8 +662,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _isSosBroadcasting.value = false
         _connectedRescuer.value = null
         _nearbyRescuers.value = emptyList()
-        _wifiDirectEnabled.value = false
-        _bluetoothEnabled.value = false
+        // The two radio flags are the user's global radio preference, not SOS
+        // state. Forcing them off here left every later Rescue/Walkie screen
+        // with a dead BLE path - bootRescueSystem(), startBleScanIfActive(),
+        // onBluetoothStateRestored() and syncBeaconAdvertising() all
+        // short-circuit on them, the radio panel that could switch them back on
+        // lives on the SOS page only - so BLE discovery stayed off until the
+        // process was recreated. The teardown below still stops the beacon, the
+        // scan, the UDP mesh and the P2P group because no mode is active.
         _isReceivingOneWayBroadcast.value = false
         _uiState.update { it.copy(channelState = RadioChannelState.STANDBY) }
 

@@ -34,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,6 +55,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.itantra.app.localization.AppStringsProvider
+import com.itantra.app.localization.LocalAppStrings
 import com.itantra.app.ui.components.MissionBottomNav
 import com.itantra.app.ui.components.MissionDestination
 import com.itantra.app.ui.components.soft.SoftIcon
@@ -149,21 +152,27 @@ class MainActivity : ComponentActivity() {
                 else -> false
             }
 
-            MyApplicationTheme(darkTheme = isDark) {
-                if (!uiState.isOnboardingCompleted && !isLockscreenSosTriggered.value) {
-                    OnboardingScreen(
-                        viewModel = viewModel,
-                        onContinue = { /* DataStore auto-updates uiState */ }
-                    )
-                } else {
-                    MainAppContent(
-                        viewModel = viewModel,
-                        isLockscreenSosTriggered = isLockscreenSosTriggered.value,
-                        onEmergencyEnded = {
-                            isLockscreenSosTriggered.value = false
-                            clearLockscreenVisibility()
-                        }
-                    )
+            val currentStrings = remember(uiState.selectedLanguage) {
+                AppStringsProvider.forLanguage(uiState.selectedLanguage)
+            }
+
+            CompositionLocalProvider(LocalAppStrings provides currentStrings) {
+                MyApplicationTheme(darkTheme = isDark) {
+                    if (!uiState.isOnboardingCompleted && !isLockscreenSosTriggered.value) {
+                        OnboardingScreen(
+                            viewModel = viewModel,
+                            onContinue = { /* DataStore auto-updates uiState */ }
+                        )
+                    } else {
+                        MainAppContent(
+                            viewModel = viewModel,
+                            isLockscreenSosTriggered = isLockscreenSosTriggered.value,
+                            onEmergencyEnded = {
+                                isLockscreenSosTriggered.value = false
+                                clearLockscreenVisibility()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -178,6 +187,7 @@ fun MainAppContent(
 ) {
     val context = LocalContext.current
     val colors = MinimalColorsInstance
+    val strings = LocalAppStrings.current
 
     val requiredPermissions = remember {
         val list = mutableListOf(
@@ -359,13 +369,13 @@ fun MainAppContent(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Microphone access needed",
+                                        text = strings.micPermissionNeeded,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Enables hands-free emergency voice",
+                                        text = strings.micPermissionDesc,
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -380,7 +390,7 @@ fun MainAppContent(
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.grant, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -415,13 +425,13 @@ fun MainAppContent(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Bluetooth is off",
+                                        text = strings.bluetoothOff,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Needed to broadcast SOS and find nearby devices",
+                                        text = strings.bluetoothOffDesc,
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -440,7 +450,7 @@ fun MainAppContent(
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.turnOn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -475,13 +485,13 @@ fun MainAppContent(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Location is off",
+                                        text = strings.locationOff,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Android needs location on to discover nearby devices",
+                                        text = strings.locationOffDesc,
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -500,7 +510,7 @@ fun MainAppContent(
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(strings.turnOn, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }

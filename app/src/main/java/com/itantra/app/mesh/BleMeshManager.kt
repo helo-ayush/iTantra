@@ -21,7 +21,10 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
@@ -237,6 +240,53 @@ internal fun shouldRestartAdvertising(
 }
 
 /**
+ * Liveness of one scan session, fed by real [ScanCallback] deliveries.
+ *
+ * [sessionStartedEpochMs] is 0 until a scan is actually handed to the platform.
+ */
+internal data class ScanSessionLiveness(
+    val sessionStartedEpochMs: Long = 0L,
+    val callbackCount: Int = 0,
+    val lastCallbackEpochMs: Long = 0L
+)
+
+/**
+ * Pure decision: must the platform scan be restarted for real?
+ *
+ * `startScan` has no success callback, so the "scanning" flag is only an
+ * optimistic belief: a scan that the platform kills silently (adapter power
+ * cycle, controller reset, background throttling) leaves it `true` forever and
+ * turns every later `startScan` into a no-op - the state that previously only
+ * an app restart could clear. Liveness therefore has to come from real
+ * callbacks, and a session is only declared dead once it had demonstrably been
+ * alive:
+ *
+ *  - it delivered at least [minCallbacks] results inside [warmupMs], and
+ *  - it has then been silent for [stallTimeoutMs].
+ *
+ * The warm-up floor is what keeps a genuinely empty RF environment (a quiet
+ * field with no other radios) from being mistaken for a dead controller.
+ *
+ * Host-JVM testable (no Android imports).
+ */
+internal fun shouldRestartStalledScan(
+    scanRequested: Boolean,
+    believedScanning: Boolean,
+    adapterEnabled: Boolean,
+    liveness: ScanSessionLiveness,
+    nowEpochMs: Long,
+    warmupMs: Long,
+    stallTimeoutMs: Long,
+    minCallbacks: Int
+): Boolean {
+    if (!scanRequested || !believedScanning || !adapterEnabled) return false
+    if (liveness.sessionStartedEpochMs <= 0L) return false
+    if (nowEpochMs - liveness.sessionStartedEpochMs < warmupMs) return false
+    if (liveness.callbackCount < minCallbacks) return false
+    return nowEpochMs - liveness.lastCallbackEpochMs >= stallTimeoutMs
+}
+
+/**
  * BLE advertiser + scanner for the iTantra mesh.
  *
  * Both sides agree on a single 128-bit service UUID and a fixed
@@ -273,7 +323,20 @@ class BleMeshManager(context: Context) {
          */
         const val MAX_GATT_WRITE_BYTES = 512
 
-        private const val BEACON_STALE_MS = 10_000L
+        /**
+         * How long a discovered peer survives in the visible list after its last
+         * advert was heard.
+         *
+         * This must outlast the worst-case window in which a live peer can be
+         * off the air, or a phone standing right next to us blinks out of the
+         * list. That window is one full advertise-watchdog period plus the worst
+         * restart-retry chain:
+         *   [ADVERT_WATCHDOG_PERIOD_MS] (30 s) + 1.5 s + 3 s + 4.5 s = 39 s.
+         * A shorter TTL than that silently converted an advertise hiccup on the
+         * *other* device into "appears, then vanishes" on this one.
+         * Locked down by `BleDiscoveryLivenessTest`.
+         */
+        internal const val BEACON_STALE_MS = 45_000L
         private const val PRUNE_PERIOD_MS = 1_000L
 
         /**
@@ -284,11 +347,11 @@ class BleMeshManager(context: Context) {
         private const val ADVERT_REFRESH_MIN_INTERVAL_MS = 15_000L
 
         /** Bounded advertise-start retry schedule after a controller failure. */
-        private const val ADVERTISE_MAX_RETRIES = 5
-        private const val ADVERTISE_RETRY_DELAY_MS = 1_500L
+        internal const val ADVERTISE_MAX_RETRIES = 5
+        internal const val ADVERTISE_RETRY_DELAY_MS = 1_500L
 
         /** How often the beacon is force re-asserted to survive a silent stop. */
-        private const val ADVERT_WATCHDOG_PERIOD_MS = 30_000L
+        internal const val ADVERT_WATCHDOG_PERIOD_MS = 30_000L
 
         /** Bounded scan-start retry schedule after a controller failure. */
         private const val SCAN_MAX_RETRIES = 5
@@ -296,6 +359,19 @@ class BleMeshManager(context: Context) {
 
         /** How often the scan watchdog verifies scanning is still alive. */
         private const val SCAN_WATCHDOG_PERIOD_MS = 15_000L
+
+        /** Settle time between retiring a scan client and starting a new one. */
+        private const val SCAN_RESTART_SETTLE_MS = 250L
+
+        /**
+         * Scan liveness thresholds for [shouldRestartStalledScan]. A session is
+         * only declared dead once it has demonstrably delivered [SCAN_STALL_MIN_CALLBACKS]
+         * results inside [SCAN_STALL_WARMUP_MS] and then gone quiet for
+         * [SCAN_STALL_TIMEOUT_MS].
+         */
+        internal const val SCAN_STALL_WARMUP_MS = 30_000L
+        internal const val SCAN_STALL_TIMEOUT_MS = 20_000L
+        internal const val SCAN_STALL_MIN_CALLBACKS = 5
     }
 
     private val appContext = context.applicationContext
@@ -938,6 +1014,7 @@ class BleMeshManager(context: Context) {
         requestedBeacon = beacon
         requestedTxPower = txPower
         advertiseRequested = true
+        registerAdapterStateReceiver()
         startAdvertiseWatchdog()
         return applyAdvertising(force = false)
     }
@@ -1048,12 +1125,29 @@ class BleMeshManager(context: Context) {
     private var scanRetryAttempts = 0
     private var scanWatchdogJob: Job? = null
 
+    /**
+     * Real delivery liveness of the current scan session. Written from the
+     * scan-callback thread, read by the watchdog.
+     */
+    @Volatile
+    private var scanLiveness = ScanSessionLiveness()
+
+    /**
+     * Adapter power-cycle listener. The platform cancels every scan and advert
+     * when the radio goes down and reports nothing back, so without this the
+     * "scanning"/"advertising" flags stayed `true` on a dead radio and every
+     * later start was a no-op.
+     */
+    private var adapterStateReceiver: BroadcastReceiver? = null
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+            markScanAlive()
             handleScanResult(result)
         }
 
         override fun onBatchScanResults(results: List<ScanResult>) {
+            markScanAlive()
             results.forEach(::handleScanResult)
         }
 
@@ -1062,6 +1156,19 @@ class BleMeshManager(context: Context) {
             Log.e("BleMeshManager", "BLE scan failed, errorCode: $errorCode")
             scheduleScanRetry()
         }
+    }
+
+    /**
+     * Records that the platform scan is really delivering. Counted for every
+     * packet - not only iTantra adverts - so liveness never depends on a peer
+     * being in range.
+     */
+    private fun markScanAlive() {
+        val current = scanLiveness
+        scanLiveness = current.copy(
+            callbackCount = current.callbackCount + 1,
+            lastCallbackEpochMs = System.currentTimeMillis()
+        )
     }
 
     private fun handleScanResult(result: ScanResult) {
@@ -1146,7 +1253,9 @@ class BleMeshManager(context: Context) {
             // handleScanResult specifically discards non-iTantra manufacturer packets.
             val anyFilter = ScanFilter.Builder().build()
             startGattServer()
+            registerAdapterStateReceiver()
             scanner.startScan(listOf(anyFilter), settings, scanCallback)
+            scanLiveness = ScanSessionLiveness(sessionStartedEpochMs = System.currentTimeMillis())
             _isScanning.value = true
             scanRetryAttempts = 0
             Log.i("BleMeshManager", "BLE scanner started")
@@ -1182,7 +1291,14 @@ class BleMeshManager(context: Context) {
 
     /**
      * Self-heals a scan that the platform stopped silently (OEM throttling /
-     * controller reset) without ever calling back into the app.
+     * controller reset / radio power cycle) without ever calling back into the
+     * app.
+     *
+     * The "scanning" flag is only a belief (`startScan` has no success
+     * callback), so a flag check alone can never notice a scan that died: the
+     * watchdog also compares real callback delivery against
+     * [shouldRestartStalledScan] and restarts the scan for real when a session
+     * that was demonstrably alive has gone quiet.
      */
     private fun startScanWatchdog() {
         if (scanWatchdogJob?.isActive == true) return
@@ -1193,9 +1309,103 @@ class BleMeshManager(context: Context) {
                 if (!_isScanning.value) {
                     Log.w("BleMeshManager", "Scan watchdog: scanner not active, re-arming")
                     startScanningInternal()
+                    continue
+                }
+                val liveness = scanLiveness
+                val now = System.currentTimeMillis()
+                if (shouldRestartStalledScan(
+                        scanRequested = scanRequested,
+                        believedScanning = _isScanning.value,
+                        adapterEnabled = isBluetoothEnabled(),
+                        liveness = liveness,
+                        nowEpochMs = now,
+                        warmupMs = SCAN_STALL_WARMUP_MS,
+                        stallTimeoutMs = SCAN_STALL_TIMEOUT_MS,
+                        minCallbacks = SCAN_STALL_MIN_CALLBACKS
+                    )
+                ) {
+                    Log.w(
+                        "BleMeshManager",
+                        "Scan watchdog: no scan result for ${now - liveness.lastCallbackEpochMs}ms " +
+                            "after ${liveness.callbackCount} results - restarting scan"
+                    )
+                    restartScanInternal()
                 }
             }
         }
+    }
+
+    /**
+     * Real stop+start of the platform scan, used to heal a scan the platform
+     * killed without a callback. Unlike [stopScanning] it keeps the already
+     * discovered peers, so a heal never blanks the list on screen.
+     */
+    private fun restartScanInternal() {
+        runCatching { bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback) }
+        _isScanning.value = false
+        scanLiveness = ScanSessionLiveness()
+        scope.launch {
+            // Let the controller retire the previous scan client before re-arming.
+            delay(SCAN_RESTART_SETTLE_MS)
+            if (scanRequested) startScanningInternal()
+        }
+    }
+
+    /**
+     * The platform cancels every scan and advertisement when the radio goes
+     * down and never tells the app. Without this listener the optimistic
+     * scanning/advertising flags survived the power cycle, so every later start
+     * short-circuited and discovery stayed dead until the app was relaunched.
+     */
+    private fun registerAdapterStateReceiver() {
+        synchronized(this) {
+            if (adapterStateReceiver != null) return
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                    when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                        BluetoothAdapter.STATE_ON -> onAdapterTurnedOn()
+                        BluetoothAdapter.STATE_OFF,
+                        BluetoothAdapter.STATE_TURNING_OFF -> onAdapterTurnedOff()
+                    }
+                }
+            }
+            try {
+                ContextCompat.registerReceiver(
+                    appContext,
+                    receiver,
+                    IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+                    ContextCompat.RECEIVER_NOT_EXPORTED
+                )
+                adapterStateReceiver = receiver
+            } catch (_: Exception) {
+                // Best effort: the scan watchdog still heals on its own.
+            }
+        }
+    }
+
+    private fun unregisterAdapterStateReceiver() {
+        synchronized(this) {
+            val receiver = adapterStateReceiver ?: return
+            adapterStateReceiver = null
+            runCatching { appContext.unregisterReceiver(receiver) }
+        }
+    }
+
+    /** A radio that just came back has no scan or advert left on it: re-assert both. */
+    private fun onAdapterTurnedOn() {
+        Log.i("BleMeshManager", "Bluetooth adapter ON - re-asserting scan and advert")
+        if (scanRequested) restartScanInternal()
+        if (advertiseRequested) applyAdvertising(force = true)
+    }
+
+    /** The radio is gone, so the optimistic "active" flags must not survive it. */
+    private fun onAdapterTurnedOff() {
+        Log.w("BleMeshManager", "Bluetooth adapter OFF - clearing stale scan/advert state")
+        _isScanning.value = false
+        _isAdvertising.value = false
+        onAirBeacon = null
+        scanLiveness = ScanSessionLiveness()
     }
 
     fun stopScanning() {
@@ -1205,6 +1415,7 @@ class BleMeshManager(context: Context) {
         scanWatchdogJob?.cancel()
         scanWatchdogJob = null
         scanRetryAttempts = 0
+        scanLiveness = ScanSessionLiveness()
         runCatching { bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         _isScanning.value = false
         synchronized(latest) {
@@ -1238,6 +1449,7 @@ class BleMeshManager(context: Context) {
     fun shutdown() {
         stopAdvertising()
         stopScanning()
+        unregisterAdapterStateReceiver()
         stopGattServer()
         scope.cancel()
     }

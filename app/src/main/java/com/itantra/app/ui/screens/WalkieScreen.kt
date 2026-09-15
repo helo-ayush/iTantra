@@ -74,6 +74,7 @@ import com.itantra.app.R
 import com.itantra.app.model.RadioChannelState
 import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.model.TransportProtocol
+import com.itantra.app.localization.LocalAppStrings
 import com.itantra.app.ui.components.BatteryIndicator
 import com.itantra.app.ui.components.soft.SoftBadge
 import com.itantra.app.ui.components.soft.SoftHeroDome
@@ -101,6 +102,7 @@ fun WalkieScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.minimalColors
+    val strings = LocalAppStrings.current
     val isWalkieActive by viewModel.isWalkieActive.collectAsState()
     val isMicMuted by viewModel.isMicMuted.collectAsState()
     val isTransmitting by viewModel.isTransmitting.collectAsState()
@@ -184,8 +186,8 @@ fun WalkieScreen(
         // 1. MISSION TELEMETRY HEADER
         // =======================================================
         SoftMissionHeader(
-            mode = "Walkie mesh",
-            statusText = if (isWalkieActive) "Team live" else "Standby",
+            mode = strings.navWalkie,
+            statusText = if (isWalkieActive) strings.active else strings.standby,
             statusActive = isWalkieActive,
             activeColor = colors.mesh,
             logoRes = R.drawable.img_logo_itrantra
@@ -537,8 +539,8 @@ fun WalkieScreen(
                 // SoftHeroDome as the major action
                 SoftHeroDome(
                     iconRes = R.drawable.ic_soft_radio,
-                    title = "Join walkie",
-                    subLabel = "Off-grid team voice",
+                    title = strings.walkieScreenTitle,
+                    subLabel = strings.walkieHoldToTalk,
                     onClick = { viewModel.toggleWalkieMaster(true) },
                     domeSize = 184.dp,
                     containerColor = colors.accent,
@@ -681,10 +683,10 @@ fun WalkieScreen(
                     // Dynamic Transmission Status Badge
                     SoftBadge(
                         text = when {
-                            isMicMuted -> "Mic muted — unmute to speak"
-                            isReceivingAudio -> "Receiving live voice…"
-                            isLiveTx -> if (isPttActive) "Transmitting (PTT held)" else "Transmitting…"
-                            else -> "Hold the disc to talk, or speak freely"
+                            isMicMuted -> strings.inactive
+                            isReceivingAudio -> strings.walkieListening
+                            isLiveTx -> strings.walkieTransmitting
+                            else -> strings.walkieHoldToTalk
                         },
                         containerColor = when {
                             isMicMuted -> colors.sosContainer
@@ -874,15 +876,15 @@ fun WalkieScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Live transcription",
+                                text = strings.walkieLiveTranscript,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textPrimary
                             )
                             SoftBadge(
-                                text = if (uiState.channelState == RadioChannelState.RECEIVING) "Receiving"
-                                else if (isTransmitting || isVadSpeaking || isPttActive) "Transmitting"
-                                else "Standby",
+                                text = if (uiState.channelState == RadioChannelState.RECEIVING) strings.walkieListening
+                                else if (isTransmitting || isVadSpeaking || isPttActive) strings.walkieTransmitting
+                                else strings.standby,
                                 containerColor = when {
                                     uiState.channelState == RadioChannelState.RECEIVING -> colors.meshContainer
                                     isTransmitting || isVadSpeaking || isPttActive -> colors.accentContainer
@@ -950,7 +952,7 @@ fun WalkieScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Hold the central disc or speak to transmit. Transcriptions sync across all radios automatically.",
+                                text = strings.walkieTranscriptPlaceholder,
                                 fontSize = 12.sp,
                                 color = colors.textSecondary,
                                 textAlign = TextAlign.Center
@@ -1011,7 +1013,7 @@ fun WalkieScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Paired radios (${connectedPairedCount} of ${pairedDevices.size} connected)",
+                            text = strings.walkiePeersInRange(pairedDevices.size),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
@@ -1025,7 +1027,7 @@ fun WalkieScreen(
 
                     if (pairedDevices.isEmpty()) {
                         Text(
-                            text = "No paired radios yet. Pair a discovered node below — it reconnects automatically.",
+                            text = strings.walkieNoPeers,
                             fontSize = 12.sp,
                             color = colors.textSecondary
                         )
@@ -1252,14 +1254,14 @@ fun WalkieScreen(
     if (showLanguageSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         SoftSheetShell(
-            title = "Radio language",
-            subtitle = "Pick the language for voice and transcription",
+            title = strings.selectLanguage,
+            subtitle = strings.onboardingLangSubtitle,
             onDismiss = { showLanguageSheet = false }
         ) {
             OutlinedTextField(
                 value = languageSearchQuery,
                 onValueChange = { languageSearchQuery = it },
-                placeholder = { Text("Search language or dialect…", fontSize = 13.sp, color = colors.textTertiary) },
+                placeholder = { Text(strings.searching, fontSize = 13.sp, color = colors.textTertiary) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = SoftFieldShape,

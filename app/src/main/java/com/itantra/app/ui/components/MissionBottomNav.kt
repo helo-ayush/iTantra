@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itantra.app.R
+import com.itantra.app.localization.LocalAppStrings
 import com.itantra.app.ui.components.soft.SoftIcon
 import com.itantra.app.ui.theme.MinimalColorsInstance
 
@@ -57,6 +58,7 @@ fun MissionBottomNav(
     modifier: Modifier = Modifier
 ) {
     val colors = MinimalColorsInstance
+    val strings = LocalAppStrings.current
 
     Column(
         modifier = modifier
@@ -77,6 +79,12 @@ fun MissionBottomNav(
         ) {
             MissionDestination.entries.forEach { destination ->
                 val isSelected = currentDestination == destination
+                val title = when (destination) {
+                    MissionDestination.SOS -> strings.navSos
+                    MissionDestination.WALKIE -> strings.navWalkie
+                    MissionDestination.RESCUE -> strings.navRescue
+                    MissionDestination.SETTINGS -> strings.navSettings
+                }
 
                 val itemColor by animateColorAsState(
                     targetValue = when {
@@ -137,7 +145,7 @@ fun MissionBottomNav(
                             ) {
                                 SoftIcon(
                                     resId = destination.iconRes,
-                                    contentDescription = destination.title,
+                                    contentDescription = title,
                                     tint = itemColor,
                                     modifier = Modifier.size(22.dp)
                                 )
@@ -147,7 +155,7 @@ fun MissionBottomNav(
                         Spacer(modifier = Modifier.height(3.dp))
 
                         Text(
-                            text = destination.title,
+                            text = title,
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             letterSpacing = 0.1.sp,

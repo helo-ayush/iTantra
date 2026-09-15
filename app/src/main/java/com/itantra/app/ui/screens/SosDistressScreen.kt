@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itantra.app.R
+import com.itantra.app.localization.LocalAppStrings
 import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.model.VoiceStatus
 import com.itantra.app.modelhub.ModelDownloadState
@@ -99,6 +100,7 @@ fun SosDistressScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.minimalColors
+    val strings = LocalAppStrings.current
     val uiState by viewModel.uiState.collectAsState()
     val isSosBroadcasting by viewModel.isSosBroadcasting.collectAsState()
     val wifiDirectEnabled by viewModel.wifiDirectEnabled.collectAsState()
@@ -196,7 +198,7 @@ fun SosDistressScreen(
         // =======================================================
         SoftMissionHeader(
             mode = "Off-grid",
-            statusText = if (isSosBroadcasting) "Distress active" else "Ready",
+            statusText = if (isSosBroadcasting) strings.sosBeaconActive else strings.standby,
             statusActive = isSosBroadcasting,
             activeColor = colors.error,
             logoRes = R.drawable.img_logo_itrantra
@@ -271,48 +273,37 @@ fun SosDistressScreen(
                     .background(colors.outlineStrong, RoundedCornerShape(1.dp))
             )
 
-            // Central Tactile Dome Button (Using Surface to guarantee 100% reliable click registration)
+            // Tactile Hero Dome Button
             Surface(
-                onClick = {
-                    if (isSosBroadcasting) viewModel.stopSos() else viewModel.startSos()
-                },
-                shape = CircleShape,
-                color = Color.Transparent,
-                interactionSource = buttonInteractionSource,
-                shadowElevation = if (isSosBroadcasting) 18.dp else 10.dp,
                 modifier = Modifier
-                    .size(178.dp)
+                    .size(174.dp)
                     .scale(buttonPressScale)
+                    .shadow(
+                        elevation = if (isSosBroadcasting) 24.dp else 12.dp,
+                        shape = CircleShape,
+                        spotColor = if (isSosBroadcasting) colors.error.copy(alpha = 0.55f) else colors.error.copy(alpha = 0.25f)
+                    ),
+                shape = CircleShape,
+                color = colors.error,
+                onClick = {
+                    if (isSosBroadcasting) {
+                        viewModel.stopSos()
+                    } else {
+                        viewModel.startSos()
+                    }
+                },
+                interactionSource = buttonInteractionSource
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            brush = if (isSosBroadcasting) {
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        colors.error,
-                                        colors.sosDeep
-                                    )
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    colors.error,
+                                    colors.error.copy(alpha = 0.88f)
                                 )
-                            } else {
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        colors.error.copy(alpha = 0.92f),
-                                        colors.sosDeep
-                                    )
-                                )
-                            }
-                        )
-                        .border(
-                            width = 2.5.dp,
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.45f),
-                                    Color.White.copy(alpha = 0.10f)
-                                )
-                            ),
-                            shape = CircleShape
+                            )
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -333,7 +324,7 @@ fun SosDistressScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Emergency",
+                                text = strings.sosScreenTitle,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 1.2.sp,
@@ -343,7 +334,7 @@ fun SosDistressScreen(
 
                         // Hero SOS Headline
                         Text(
-                            text = "SOS",
+                            text = strings.navSos,
                             fontSize = 44.sp,
                             fontWeight = FontWeight.SemiBold,
                             letterSpacing = (-0.5).sp,
@@ -369,7 +360,7 @@ fun SosDistressScreen(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (isSosBroadcasting) "Broadcasting" else "Tap to start",
+                                    text = if (isSosBroadcasting) strings.active else strings.sosHoldToBroadcast,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 0.4.sp,
@@ -407,7 +398,7 @@ fun SosDistressScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Tap SOS to alert every rescue node in a 250 m mesh radius",
+                        text = strings.sosTapToActivate,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = colors.textSecondary,
@@ -423,7 +414,7 @@ fun SosDistressScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Your distress beacon is broadcasting.\nNearby rescuers' phones are vibrating to locate you.",
+                    text = strings.sosBroadcastingBle,
                     fontSize = 13.sp,
                     color = colors.sosContainerText,
                     fontWeight = FontWeight.SemiBold,
@@ -450,7 +441,7 @@ fun SosDistressScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Stop distress SOS",
+                        text = strings.sosCancelButton,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
@@ -508,7 +499,7 @@ fun SosDistressScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Voice engine",
+                                    text = strings.sosAudioBeaconTitle,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     letterSpacing = 0.2.sp,
@@ -555,7 +546,7 @@ fun SosDistressScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Change",
+                                text = strings.selectLanguage,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.accentContainerText
@@ -1003,7 +994,7 @@ fun SosDistressScreen(
                                         }
                                     }
                                     Text(
-                                        text = if (isBroadcast) "Dismiss" else "End call",
+                                        text = if (isBroadcast) strings.dismiss else strings.sosCancelButton,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = if (isBroadcast) colors.rescueContainerText else colors.sosContainerText
@@ -1038,7 +1029,7 @@ fun SosDistressScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
-                                        text = "Live transcription",
+                                        text = strings.walkieLiveTranscript,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = colors.textPrimary
@@ -1246,7 +1237,7 @@ fun SosDistressScreen(
                             // Localized Quick Emergency Transmit Chips
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "Quick emergency phrases (${selectedLanguage.englishName})",
+                                    text = "${strings.sosQuickPhrasesTitle} (${selectedLanguage.nativeName})",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Medium,
                                     letterSpacing = 0.2.sp,
@@ -1631,7 +1622,7 @@ fun SosDistressScreen(
                 ) {
                     Column {
                         Text(
-                            text = "Voice language",
+                            text = strings.sosBroadcastLangTitle,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
@@ -1652,7 +1643,7 @@ fun SosDistressScreen(
                     ) {
                         SoftIcon(
                             resId = R.drawable.ic_soft_close,
-                            contentDescription = "Close",
+                            contentDescription = strings.close,
                             tint = colors.textSecondary
                         )
                     }
@@ -1689,7 +1680,7 @@ fun SosDistressScreen(
                             decorationBox = { innerTextField ->
                                 if (languageSearchQuery.isEmpty()) {
                                     Text(
-                                        text = "Search language or dialect…",
+                                        text = strings.searching,
                                         fontSize = 14.sp,
                                         color = colors.textTertiary
                                     )

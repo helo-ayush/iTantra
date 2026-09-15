@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itantra.app.R
+import com.itantra.app.localization.LocalAppStrings
 import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.ui.components.soft.SoftBadge
 import com.itantra.app.ui.components.soft.SoftButton
@@ -79,6 +80,7 @@ fun OnboardingScreen(
     onContinue: () -> Unit
 ) {
     val colors = MaterialTheme.minimalColors
+    val strings = LocalAppStrings.current
     val scrollState = rememberScrollState()
 
     // Form States
@@ -102,8 +104,8 @@ fun OnboardingScreen(
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
-    val genderOptions = listOf("Male", "Female", "Other", "Prefer not to say")
-    val relationOptions = listOf("Parent", "Father", "Mother", "Spouse", "Sibling", "Child", "Guardian", "Friend", "Other")
+    val genderOptions = listOf(strings.genderMale, strings.genderFemale, strings.genderOther)
+    val relationOptions = listOf(strings.relationParent, strings.relationSpouse, strings.relationChild, strings.relationSibling, strings.relationFriend)
 
     val buttonInteraction = remember { MutableInteractionSource() }
     val isPressed by buttonInteraction.collectIsPressedAsState()
@@ -147,7 +149,7 @@ fun OnboardingScreen(
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 SoftBadge(
-                    text = "Offline emergency mesh",
+                    text = strings.onboardingWelcomeSubtitle,
                     containerColor = colors.accentContainer,
                     contentColor = colors.accentContainerText
                 )
@@ -155,7 +157,7 @@ fun OnboardingScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Set up your identity",
+                    text = strings.onboardingProfileHeader,
                     fontSize = 26.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = (-0.4).sp,
@@ -165,7 +167,7 @@ fun OnboardingScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = "Tell the mesh who you are, so nearby teams can recognise and help you in an emergency.",
+                    text = strings.onboardingProfileSubtitle,
                     fontSize = 14.sp,
                     color = colors.textSecondary,
                     lineHeight = 20.sp,
@@ -184,7 +186,7 @@ fun OnboardingScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "Required",
+                        text = strings.confirm,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.3.sp,
@@ -219,7 +221,7 @@ fun OnboardingScreen(
                             )
                             Box(Modifier.width(8.dp))
                             Text(
-                                text = "Preferred languages",
+                                text = strings.onboardingLangLabel,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textPrimary,
@@ -255,7 +257,7 @@ fun OnboardingScreen(
                         }
 
                         Text(
-                            text = "Choose the languages you speak",
+                            text = strings.onboardingLangSubtitle,
                             fontSize = 12.sp,
                             color = colors.textSecondary
                         )
@@ -271,7 +273,7 @@ fun OnboardingScreen(
                     SoftCard(modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                text = "Age",
+                                text = strings.onboardingAgeLabel,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.3.sp,
@@ -309,7 +311,7 @@ fun OnboardingScreen(
                     SoftCard(modifier = Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
-                                text = "Gender",
+                                text = strings.onboardingGenderLabel,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 letterSpacing = 0.3.sp,
@@ -383,23 +385,23 @@ fun OnboardingScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     SoftBadge(
-                        text = "Optional",
+                        text = strings.confirm,
                         containerColor = colors.badgeBlueContainer,
                         contentColor = colors.badgeBlueText
                     )
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Name & emergency contact",
+                            text = strings.onboardingContactHeader,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textPrimary
                         )
                         Text(
                             text = if (isOptionalExpanded) {
-                                "Tap to hide these fields"
+                                strings.dismiss
                             } else {
-                                "Add your name and a family contact"
+                                strings.onboardingContactSubtitle
                             },
                             fontSize = 12.sp,
                             color = colors.textSecondary
@@ -427,7 +429,7 @@ fun OnboardingScreen(
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
-                                        text = "Full name",
+                                        text = strings.onboardingNameLabel,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         letterSpacing = 0.2.sp,
@@ -441,7 +443,7 @@ fun OnboardingScreen(
                                         name = it
                                         if (showError) showError = false
                                     },
-                                    placeholder = { Text("e.g. Rahul Sharma", color = colors.textTertiary) },
+                                    placeholder = { Text(strings.onboardingNamePlaceholder, color = colors.textTertiary) },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                                     colors = OutlinedTextFieldDefaults.colors(
@@ -457,7 +459,7 @@ fun OnboardingScreen(
                                 )
 
                                 Text(
-                                    text = "Shared with nearby nodes, so rescuers see your name instead of an id.",
+                                    text = strings.onboardingProfileSubtitle,
                                     fontSize = 12.sp,
                                     color = colors.textSecondary
                                 )
@@ -480,7 +482,7 @@ fun OnboardingScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = "Emergency contact",
+                                            text = strings.onboardingContactHeader,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             letterSpacing = 0.2.sp,
@@ -489,7 +491,7 @@ fun OnboardingScreen(
                                     }
 
                                     SoftBadge(
-                                        text = "Shared in SOS",
+                                        text = strings.navSos,
                                         containerColor = colors.badgeBlueContainer,
                                         contentColor = colors.badgeBlueText
                                     )
@@ -555,7 +557,7 @@ fun OnboardingScreen(
                                                 relativePhone = input
                                             }
                                         },
-                                        placeholder = { Text("+91 98765 43210", fontSize = 13.sp, color = colors.textTertiary) },
+                                        placeholder = { Text(strings.onboardingPhonePlaceholder, fontSize = 13.sp, color = colors.textTertiary) },
                                         singleLine = true,
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                                         colors = OutlinedTextFieldDefaults.colors(
@@ -574,7 +576,7 @@ fun OnboardingScreen(
                                 }
 
                                 Text(
-                                    text = "Rescue teams will see this number during an SOS, so your family can be reached quickly.",
+                                    text = strings.onboardingContactSubtitle,
                                     fontSize = 12.sp,
                                     color = colors.textSecondary
                                 )
@@ -657,7 +659,7 @@ fun OnboardingScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Continue",
+                        text = strings.onboardingCompleteButton,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.onAccent
@@ -702,15 +704,15 @@ fun OnboardingScreen(
     // =======================================================
     if (isLanguageSheetOpen) {
         SoftSheetShell(
-            title = "Your languages",
-            subtitle = "Choose the languages you speak or understand",
+            title = strings.onboardingLangLabel,
+            subtitle = strings.onboardingLangSubtitle,
             onDismiss = { isLanguageSheetOpen = false }
         ) {
             // Search Bar
             OutlinedTextField(
                 value = languageSearchQuery,
                 onValueChange = { languageSearchQuery = it },
-                placeholder = { Text("Search languages…", fontSize = 13.sp, color = colors.textTertiary) },
+                placeholder = { Text(strings.searching, fontSize = 13.sp, color = colors.textTertiary) },
                 leadingIcon = {
                     SoftIcon(
                         resId = R.drawable.ic_soft_search,
@@ -752,7 +754,7 @@ fun OnboardingScreen(
                             .clip(RoundedCornerShape(16.dp))
                             .background(if (isSelected) colors.accentContainer else colors.cardSecondaryBg)
                             .clickable {
-                                selectedLanguageCodes = if (isSelected) {
+                                val updated = if (isSelected) {
                                     if (selectedLanguageCodes.size > 1) {
                                         selectedLanguageCodes - lang.code
                                     } else {
@@ -760,6 +762,10 @@ fun OnboardingScreen(
                                     }
                                 } else {
                                     selectedLanguageCodes + lang.code
+                                }
+                                selectedLanguageCodes = updated
+                                updated.firstOrNull()?.let { code ->
+                                    viewModel.setSelectedLanguage(SupportedLanguage.fromCode(code))
                                 }
                             }
                             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -801,7 +807,7 @@ fun OnboardingScreen(
                         Checkbox(
                             checked = isSelected,
                             onCheckedChange = { checked ->
-                                selectedLanguageCodes = if (checked) {
+                                val updated = if (checked) {
                                     selectedLanguageCodes + lang.code
                                 } else {
                                     if (selectedLanguageCodes.size > 1) {
@@ -809,6 +815,10 @@ fun OnboardingScreen(
                                     } else {
                                         selectedLanguageCodes
                                     }
+                                }
+                                selectedLanguageCodes = updated
+                                updated.firstOrNull()?.let { code ->
+                                    viewModel.setSelectedLanguage(SupportedLanguage.fromCode(code))
                                 }
                             },
                             colors = CheckboxDefaults.colors(
@@ -823,8 +833,13 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SoftButton(
-                text = "Apply (${selectedLanguageCodes.size} selected)",
-                onClick = { isLanguageSheetOpen = false },
+                text = "${strings.confirm} (${selectedLanguageCodes.size})",
+                onClick = {
+                    selectedLanguageCodes.firstOrNull()?.let { code ->
+                        viewModel.setSelectedLanguage(SupportedLanguage.fromCode(code))
+                    }
+                    isLanguageSheetOpen = false
+                },
                 modifier = Modifier.fillMaxWidth()
             )
         }

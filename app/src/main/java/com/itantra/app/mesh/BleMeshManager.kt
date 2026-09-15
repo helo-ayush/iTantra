@@ -924,20 +924,20 @@ class BleMeshManager(context: Context) {
     }
 
     /**
-     * Periodically re-asserts the beacon so a controller that silently stops
-     * advertising (no failure callback) heals itself. This unconditional 30s
-     * stop+start is a proven field safety net: some controllers kill an advert
-     * without any failure callback, leaving _isAdvertising stuck true, which a
-     * heal-only check can never recover from. Failures reported via
-     * [advertiseCallback] are additionally healed by [scheduleAdvertiseRetry].
+     * Periodically verifies the beacon is still up and re-asserts it when the
+     * state says otherwise. Heal-only by design: it must never force-restart a
+     * healthy advert, because repeated forced stop+start cycles are exactly
+     * the churn that trips some controllers into the terminal failure states
+     * the retry paths exist to recover from. Failures reported via
+     * [advertiseCallback] are healed by [scheduleAdvertiseRetry].
      */
     private fun startAdvertiseWatchdog() {
         if (advertiseWatchdogJob?.isActive == true) return
         advertiseWatchdogJob = scope.launch {
             while (isActive) {
                 delay(ADVERT_WATCHDOG_PERIOD_MS)
-                if (advertiseRequested) {
-                    Log.w("BleMeshManager", "Advertise watchdog: re-asserting beacon (30s refresh)")
+                if (advertiseRequested && !_isAdvertising.value) {
+                    Log.w("BleMeshManager", "Advertise watchdog: beacon not active, re-asserting")
                     applyAdvertising(force = true)
                 }
             }

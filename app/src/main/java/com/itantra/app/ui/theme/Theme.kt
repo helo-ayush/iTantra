@@ -1,6 +1,5 @@
 package com.itantra.app.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -9,120 +8,161 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 
-private val MinimalLightColorScheme = lightColorScheme(
-    primary = AccentBlue,
+private val SoftDayColorScheme = lightColorScheme(
+    primary = SoftIndigo,
     onPrimary = Color.White,
-    primaryContainer = AccentBlueContainer,
-    onPrimaryContainer = AccentBlueHover,
-    secondary = AccentBlueLight,
+    primaryContainer = SoftIndigoContainer,
+    onPrimaryContainer = SoftIndigoContainerText,
+    secondary = SoftSage,
     onSecondary = Color.White,
-    secondaryContainer = AccentBlueContainer,
-    onSecondaryContainer = AccentBlue,
-    tertiary = MeshGreen,
+    secondaryContainer = SoftSageContainer,
+    onSecondaryContainer = SoftSageContainerText,
+    tertiary = SoftApricot,
     onTertiary = Color.White,
-    background = LightBackground,
-    onBackground = LightPrimaryText,
-    surface = LightSurface,
-    onSurface = LightPrimaryText,
-    surfaceVariant = LightSurface,
-    onSurfaceVariant = LightSecondaryText,
+    tertiaryContainer = SoftApricotContainer,
+    onTertiaryContainer = SoftApricotContainerText,
+    background = DayBackground,
+    onBackground = DayTextPrimary,
+    surface = DaySurface,
+    onSurface = DayTextPrimary,
+    surfaceVariant = DaySurfaceAlt,
+    onSurfaceVariant = DayTextSecondary,
     surfaceContainer = Color.White,
     surfaceContainerHigh = Color.White,
-    surfaceContainerHighest = Color.White,
-    surfaceContainerLow = Color(0xFFF8FAFC),
+    surfaceContainerHighest = DaySurfaceAlt,
+    surfaceContainerLow = DayBackground,
     surfaceContainerLowest = Color.White,
-    surfaceTint = AccentBlue,
-    outline = LightOutline,
-    outlineVariant = LightOutline,
-    error = SosRed,
+    surfaceTint = SoftIndigo,
+    outline = DayOutline,
+    outlineVariant = DayOutline,
+    error = SoftCoral,
     onError = Color.White,
-    errorContainer = SosRedContainer,
-    onErrorContainer = SosRedDark
+    errorContainer = SoftCoralContainer,
+    onErrorContainer = SoftCoralContainerText
 )
 
-private val MinimalDarkColorScheme = darkColorScheme(
-    primary = AccentBlueLight,
-    onPrimary = Color.White,
-    primaryContainer = DarkAccentContainer,
-    onPrimaryContainer = DarkPrimaryText,
-    secondary = AccentBlueLight,
-    onSecondary = Color.White,
-    secondaryContainer = DarkAccentContainer,
-    onSecondaryContainer = DarkPrimaryText,
-    tertiary = MeshGreen,
-    onTertiary = Color.White,
-    background = DarkBackground,
-    onBackground = DarkPrimaryText,
-    surface = DarkSurface,
-    onSurface = DarkPrimaryText,
-    surfaceVariant = DarkSurface,
-    onSurfaceVariant = DarkSecondaryText,
-    surfaceContainer = Color(0xFF131A29),
-    surfaceContainerHigh = Color(0xFF1A2234),
-    surfaceContainerHighest = Color(0xFF222C42),
-    surfaceContainerLow = Color(0xFF0F1522),
-    surfaceContainerLowest = Color(0xFF090D16),
-    surfaceTint = AccentBlueLight,
-    outline = DarkOutline,
-    outlineVariant = DarkOutline,
-    error = SosRed,
+private val SoftNightColorScheme = darkColorScheme(
+    primary = SoftIndigoLight,
+    onPrimary = Color(0xFF15162B),
+    primaryContainer = SoftIndigoContainerDark,
+    onPrimaryContainer = SoftIndigoContainerDarkText,
+    secondary = SoftSageLight,
+    onSecondary = Color(0xFF12251B),
+    secondaryContainer = SoftSageContainerDark,
+    onSecondaryContainer = SoftSageContainerDarkText,
+    tertiary = SoftApricotLight,
+    onTertiary = Color(0xFF2C2109),
+    tertiaryContainer = SoftApricotContainerDark,
+    onTertiaryContainer = SoftApricotContainerDarkText,
+    background = NightBackground,
+    onBackground = NightTextPrimary,
+    surface = NightSurface,
+    onSurface = NightTextPrimary,
+    surfaceVariant = NightSurfaceAlt,
+    onSurfaceVariant = NightTextSecondary,
+    surfaceContainer = NightSurface,
+    surfaceContainerHigh = NightSurfaceAlt,
+    surfaceContainerHighest = Color(0xFF2C3038),
+    surfaceContainerLow = Color(0xFF1A1D22),
+    surfaceContainerLowest = Color(0xFF121419),
+    surfaceTint = SoftIndigoLight,
+    outline = NightOutline,
+    outlineVariant = NightOutline,
+    error = SoftCoralLight,
+    onError = Color(0xFF3A1512),
+    errorContainer = SoftCoralContainerDark,
+    onErrorContainer = SoftCoralContainerDarkText
+)
+
+private val SoftDayColors = MinimalColors(
+    background = DayBackground,
+    surface = DaySurface,
+    textPrimary = DayTextPrimary,
+    textSecondary = DayTextSecondary,
+    outline = DayOutline,
+    accent = SoftIndigo,
+    accentContainer = SoftIndigoContainer,
+    error = SoftCoral,
+    errorContainer = SoftCoralContainer,
+    cardSecondaryBg = DaySurfaceAlt,
+    badgeMintContainer = SoftBadgeMintContainer,
+    badgeMintText = SoftBadgeMintText,
+    badgeBlueContainer = SoftBadgeIndigoContainer,
+    badgeBlueText = SoftBadgeIndigoText,
+    badgePurpleContainer = SoftBadgePurpleContainer,
+    badgePurpleText = SoftBadgePurpleText,
+    badgeAmberContainer = SoftBadgeAmberContainer,
+    badgeAmberText = SoftBadgeAmberText,
+    isDark = false,
+    textTertiary = DayTextTertiary,
+    outlineStrong = DayOutlineStrong,
+    accentDeep = SoftIndigoDeep,
+    onAccent = Color.White,
     onError = Color.White,
-    errorContainer = Color(0xFF451A1A),
-    onErrorContainer = SosRed
+    accentContainerText = SoftIndigoContainerText,
+    sos = SoftCoral,
+    sosDeep = SoftCoralDeep,
+    sosContainer = SoftCoralContainer,
+    sosContainerText = SoftCoralContainerText,
+    rescue = SoftApricot,
+    rescueDeep = SoftApricotDeep,
+    rescueContainer = SoftApricotContainer,
+    rescueContainerText = SoftApricotContainerText,
+    mesh = SoftSage,
+    meshDeep = SoftSageDeep,
+    meshContainer = SoftSageContainer,
+    meshContainerText = SoftSageContainerText,
+    shadowTint = DayShadow
+)
+
+private val SoftNightColors = MinimalColors(
+    background = NightBackground,
+    surface = NightSurface,
+    textPrimary = NightTextPrimary,
+    textSecondary = NightTextSecondary,
+    outline = NightOutline,
+    accent = SoftIndigoLight,
+    accentContainer = SoftIndigoContainerDark,
+    error = SoftCoralLight,
+    errorContainer = SoftCoralContainerDark,
+    cardSecondaryBg = NightSurfaceAlt,
+    badgeMintContainer = SoftBadgeMintContainerDark,
+    badgeMintText = SoftBadgeMintTextDark,
+    badgeBlueContainer = SoftBadgeIndigoContainerDark,
+    badgeBlueText = SoftBadgeIndigoTextDark,
+    badgePurpleContainer = SoftBadgePurpleContainerDark,
+    badgePurpleText = SoftBadgePurpleTextDark,
+    badgeAmberContainer = SoftBadgeAmberContainerDark,
+    badgeAmberText = SoftBadgeAmberTextDark,
+    isDark = true,
+    textTertiary = NightTextTertiary,
+    outlineStrong = NightOutlineStrong,
+    accentDeep = SoftIndigo,
+    onAccent = Color(0xFF15162B),
+    onError = Color(0xFF3A1512),
+    accentContainerText = SoftIndigoContainerDarkText,
+    sos = SoftCoralLight,
+    sosDeep = SoftCoral,
+    sosContainer = SoftCoralContainerDark,
+    sosContainerText = SoftCoralContainerDarkText,
+    rescue = SoftApricotLight,
+    rescueDeep = SoftApricot,
+    rescueContainer = SoftApricotContainerDark,
+    rescueContainerText = SoftApricotContainerDarkText,
+    mesh = SoftSageLight,
+    meshDeep = SoftSage,
+    meshContainer = SoftSageContainerDark,
+    meshContainerText = SoftSageContainerDarkText,
+    shadowTint = NightShadow
 )
 
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = false, // Default to bright theme per user directive
+    darkTheme: Boolean = false, // Default to soft light theme per user directive
     content: @Composable () -> Unit
 ) {
-    val minimalColors = if (darkTheme) {
-        MinimalColors(
-            background = DarkBackground,
-            surface = DarkSurface,
-            textPrimary = DarkPrimaryText,
-            textSecondary = DarkSecondaryText,
-            outline = DarkOutline,
-            accent = AccentBlueLight,
-            accentContainer = DarkAccentContainer,
-            error = SosRed,
-            errorContainer = Color(0xFF451A1A),
-            cardSecondaryBg = Color(0xFF1E293B),
-            badgeMintContainer = Color(0xFF064E3B),
-            badgeMintText = Color(0xFF6EE7B7),
-            badgeBlueContainer = Color(0xFF1E3A8A),
-            badgeBlueText = Color(0xFF93C5FD),
-            badgePurpleContainer = Color(0xFF4C1D95),
-            badgePurpleText = Color(0xFFD8B4FE),
-            badgeAmberContainer = Color(0xFF78350F),
-            badgeAmberText = Color(0xFFFCD34D),
-            isDark = true
-        )
-    } else {
-        MinimalColors(
-            background = LightBackground,
-            surface = LightSurface,
-            textPrimary = LightPrimaryText,
-            textSecondary = LightSecondaryText,
-            outline = LightOutline,
-            accent = AccentBlue,
-            accentContainer = AccentBlueContainer,
-            error = SosRed,
-            errorContainer = SosRedContainer,
-            cardSecondaryBg = Color(0xFFF1F5F9),
-            badgeMintContainer = Color(0xFFDCFCE7),
-            badgeMintText = Color(0xFF15803D),
-            badgeBlueContainer = Color(0xFFEFF6FF),
-            badgeBlueText = Color(0xFF1D4ED8),
-            badgePurpleContainer = Color(0xFFF3E8FF),
-            badgePurpleText = Color(0xFF7E22CE),
-            badgeAmberContainer = Color(0xFFFEF3C7),
-            badgeAmberText = Color(0xFFB45309),
-            isDark = false
-        )
-    }
-
-    val colorScheme = if (darkTheme) MinimalDarkColorScheme else MinimalLightColorScheme
+    val minimalColors = if (darkTheme) SoftNightColors else SoftDayColors
+    val colorScheme = if (darkTheme) SoftNightColorScheme else SoftDayColorScheme
 
     CompositionLocalProvider(
         LocalMinimalColors provides minimalColors
@@ -130,6 +170,7 @@ fun MyApplicationTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
+            shapes = SoftShapes,
             content = content
         )
     }

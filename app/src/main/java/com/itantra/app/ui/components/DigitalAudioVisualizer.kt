@@ -29,24 +29,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.itantra.app.ui.theme.MinimalColorsInstance
 import com.itantra.app.ui.theme.minimalColors
 import kotlin.math.sin
 
 /**
- * Tactical Digital Audio Visualizer (clean gray digital bars).
+ * Soft audio visualizer (rounded bars, calm palette).
  *
- * Displays a sleek row of digital equalizer bars that dynamically dance
- * in response to live microphone or incoming playback audio levels.
+ * Displays a row of equalizer bars that dynamically dance in response to
+ * live microphone or incoming playback audio levels.
  */
 @Composable
 fun DigitalAudioVisualizer(
     audioLevel: Float,
     isActive: Boolean,
     modifier: Modifier = Modifier,
-    label: String = if (isActive) "DIGITAL AUDIO LINK" else "STANDBY",
+    label: String = if (isActive) "Live audio" else "Standby",
     barCount: Int = 22,
-    baseColor: Color = Color(0xFF64748B), // Slate gray
-    activeColor: Color = Color(0xFF94A3B8)
+    baseColor: Color = MinimalColorsInstance.accent,
+    activeColor: Color = MinimalColorsInstance.accentDeep
 ) {
     val colors = MaterialTheme.minimalColors
     val infiniteTransition = rememberInfiniteTransition(label = "digitalVisualizer")
@@ -70,9 +71,9 @@ fun DigitalAudioVisualizer(
 
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (colors.isDark) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFF1F5F9))
-            .border(1.dp, if (colors.isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.cardSecondaryBg)
+            .border(1.dp, colors.outline, RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(
@@ -90,18 +91,18 @@ fun DigitalAudioVisualizer(
                         .width(6.dp)
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp))
-                        .background(if (isActive && smoothLevel > 0.05f) Color(0xFF10B981) else Color(0xFF94A3B8))
+                        .background(if (isActive && smoothLevel > 0.05f) colors.mesh else colors.textTertiary)
                 )
                 Text(
                     text = label,
                     fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp,
-                    color = if (colors.isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp,
+                    color = colors.textSecondary
                 )
             }
 
-            // Digital Gray Equalizer Bars
+            // Equalizer bars
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.5.dp),
@@ -119,7 +120,7 @@ fun DigitalAudioVisualizer(
 
                     val isHigh = smoothLevel > 0.4f && waveFactor > 0.7f
                     val barTint = when {
-                        !isActive -> Color(0xFF94A3B8).copy(alpha = 0.4f)
+                        !isActive -> colors.textTertiary.copy(alpha = 0.4f)
                         isHigh -> activeColor
                         else -> baseColor
                     }

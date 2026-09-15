@@ -29,13 +29,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,6 +56,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.itantra.app.ui.components.MissionBottomNav
 import com.itantra.app.ui.components.MissionDestination
+import com.itantra.app.ui.components.soft.SoftIcon
 import com.itantra.app.ui.screens.RescueScreen
 import com.itantra.app.ui.screens.SettingsScreen
 import com.itantra.app.ui.screens.SosDistressScreen
@@ -68,8 +64,6 @@ import com.itantra.app.ui.screens.OnboardingScreen
 import com.itantra.app.ui.screens.WalkieScreen
 import com.itantra.app.ui.theme.MinimalColorsInstance
 import com.itantra.app.ui.theme.MyApplicationTheme
-import com.itantra.app.ui.theme.RescueAmber
-import com.itantra.app.ui.theme.SosRed
 import com.itantra.app.viewmodel.MissionControlViewModel
 
 class MainActivity : ComponentActivity() {
@@ -356,11 +350,11 @@ fun MainAppContent(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Mic,
+                                SoftIcon(
+                                    resId = com.itantra.app.R.drawable.ic_soft_mic,
                                     contentDescription = null,
                                     tint = colors.accent,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
@@ -371,7 +365,7 @@ fun MainAppContent(
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Enables emergency hands-free voice transmission",
+                                        text = "Enables hands-free emergency voice",
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -382,11 +376,11 @@ fun MainAppContent(
                                 onClick = { permissionLauncher.launch(requiredPermissions) },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = colors.accent,
-                                    contentColor = Color.White
+                                    contentColor = colors.onAccent
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -400,7 +394,7 @@ fun MainAppContent(
                             .padding(horizontal = 18.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.surface)
-                            .border(1.dp, SosRed.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                            .border(1.dp, colors.error.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                             .padding(14.dp)
                     ) {
                         Row(
@@ -412,22 +406,22 @@ fun MainAppContent(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bluetooth,
+                                SoftIcon(
+                                    resId = com.itantra.app.R.drawable.ic_soft_bluetooth,
                                     contentDescription = null,
-                                    tint = SosRed,
-                                    modifier = Modifier.size(22.dp)
+                                    tint = colors.error,
+                                    modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Bluetooth is turned OFF",
+                                        text = "Bluetooth is off",
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Turn ON to broadcast SOS & detect nearby devices",
+                                        text = "Needed to broadcast SOS and find nearby devices",
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -441,12 +435,12 @@ fun MainAppContent(
                                     } catch (_: Exception) {}
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = SosRed,
-                                    contentColor = Color.White
+                                    containerColor = colors.error,
+                                    contentColor = colors.onAccent
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -460,7 +454,7 @@ fun MainAppContent(
                             .padding(horizontal = 18.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(colors.surface)
-                            .border(1.dp, RescueAmber.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                            .border(1.dp, colors.rescue.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                             .padding(14.dp)
                     ) {
                         Row(
@@ -472,22 +466,22 @@ fun MainAppContent(
                                 modifier = Modifier.weight(1f),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocationOn,
+                                SoftIcon(
+                                    resId = com.itantra.app.R.drawable.ic_soft_pin,
                                     contentDescription = null,
-                                    tint = RescueAmber,
-                                    modifier = Modifier.size(22.dp)
+                                    tint = colors.rescue,
+                                    modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Location (GPS) is turned OFF",
+                                        text = "Location is off",
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.Medium,
                                         color = colors.textPrimary
                                     )
                                     Text(
-                                        text = "Android OS requires Location ON for peer discovery",
+                                        text = "Android needs location on to discover nearby devices",
                                         fontSize = 12.sp,
                                         color = colors.textSecondary
                                     )
@@ -501,12 +495,12 @@ fun MainAppContent(
                                     } catch (_: Exception) {}
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = RescueAmber,
-                                    contentColor = Color.Black
+                                    containerColor = colors.rescue,
+                                    contentColor = colors.textPrimary
                                 ),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Turn On", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }

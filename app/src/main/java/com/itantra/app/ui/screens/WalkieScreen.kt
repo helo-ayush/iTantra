@@ -38,23 +38,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Hearing
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,8 +45,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -87,36 +70,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.itantra.app.model.PeerDevice
+import com.itantra.app.R
 import com.itantra.app.model.RadioChannelState
 import com.itantra.app.model.SupportedLanguage
 import com.itantra.app.model.TransportProtocol
 import com.itantra.app.ui.components.BatteryIndicator
-import com.itantra.app.ui.theme.AccentBlue
-import com.itantra.app.ui.theme.AccentBlueContainer
-import com.itantra.app.ui.theme.BadgeMintContainer
-import com.itantra.app.ui.theme.BadgeMintText
-import com.itantra.app.ui.theme.MeshGreen
-import com.itantra.app.ui.theme.MeshGreenContainer
-import com.itantra.app.ui.theme.MeshGreenText
-import com.itantra.app.ui.theme.SosRed
-import com.itantra.app.ui.theme.SosRedDark
+import com.itantra.app.ui.components.soft.SoftBadge
+import com.itantra.app.ui.components.soft.SoftHeroDome
+import com.itantra.app.ui.components.soft.SoftIcon
+import com.itantra.app.ui.components.soft.SoftMissionHeader
+import com.itantra.app.ui.components.soft.SoftSheetShell
+import com.itantra.app.ui.components.soft.SoftStatusDot
+import com.itantra.app.ui.theme.SoftFieldShape
 import com.itantra.app.ui.theme.minimalColors
 import com.itantra.app.viewmodel.MissionControlViewModel
 
 /**
- * World-Class Modern, Minimalistic Walkie-Talkie Screen:
- * - High-End Mission Telemetry Header matching the SOS / Rescue pages
- * - Language Selector Card with 1-Tap Dialect Chips and Full Dialect Sheet
- * - Warning & Language Mismatch Banner with 1-Tap Peer Sync
- * - Standby Mode: Prominent, highlighted hero transceiver dome
- * - Active Mode: Transforms into a high-end call & intercom console with:
- *     - Interactive Central Disc: Push-to-Talk (PTT hold) + Auto-Voice VAD
- *     - Live Equalizer audio spectrum visualizer
- *     - Clean 3-Button Controls: Mic Mute, Speakerphone, Disconnect (Dictate removed)
- * - Revealed Controls on Activation:
- *     - Paired Team Radios with signal, battery & unpair
- *     - Available Nearby Nodes with interactive, animated Refresh/Rescan button
+ * Walkie-Talkie screen, Soft Minimalism edition:
+ * - Telemetry header (brand pill · status capsule)
+ * - Language selector card with 1-tap dialect chips and full sheet
+ * - Pairing request banner + language mismatch banner with 1-tap peer sync
+ * - Standby: soft hero dome ("Join walkie")
+ * - Active: team voice room with PTT disc (hold-to-talk + VAD), live equalizer,
+ *   mute / speaker / disconnect controls, transcription log, paired & nearby nodes
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -190,7 +166,7 @@ fun WalkieScreen(
     val buttonInteractionSource = remember { MutableInteractionSource() }
     val isPressed by buttonInteractionSource.collectIsPressedAsState()
     val buttonPressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
+        targetValue = if (isPressed) 0.96f else 1f,
         animationSpec = tween(120, easing = FastOutSlowInEasing),
         label = "buttonPressScale"
     )
@@ -200,96 +176,20 @@ fun WalkieScreen(
             .fillMaxSize()
             .background(colors.background)
             .verticalScroll(scrollState)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // =======================================================
-        // 1. HIGH-END MISSION TELEMETRY HEADER
+        // 1. MISSION TELEMETRY HEADER
         // =======================================================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left: Brand & Mode Identity
-            Box(
-                modifier = Modifier
-                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp), spotColor = Color(0x08000000))
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(colors.surface)
-                    .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(colors.accent)
-                    )
-                    Text(
-                        text = "iTANTRA",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.2.sp,
-                        color = colors.textPrimary
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(10.dp)
-                            .background(colors.outline)
-                    )
-                    Text(
-                        text = "WALKIE MESH",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        color = colors.textSecondary
-                    )
-                }
-            }
-
-            // Right: Dynamic System Status Capsule
-            Box(
-                modifier = Modifier
-                    .shadow(elevation = 1.dp, shape = RoundedCornerShape(12.dp), spotColor = Color(0x08000000))
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (isWalkieActive) colors.badgeMintContainer else colors.surface)
-                    .border(
-                        width = 1.dp,
-                        color = if (isWalkieActive) colors.badgeMintText else colors.outline,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .scale(if (isWalkieActive) ringScale else 1f)
-                            .clip(CircleShape)
-                            .background(if (isWalkieActive) MeshGreen else colors.textSecondary)
-                    )
-                    Text(
-                        text = if (isWalkieActive) "LIVE TEAM COMMS" else "RADIO STANDBY",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.6.sp,
-                        color = if (isWalkieActive) colors.badgeMintText else colors.textSecondary
-                    )
-                }
-            }
-        }
+        SoftMissionHeader(
+            mode = "Walkie mesh",
+            statusText = if (isWalkieActive) "Team live" else "Standby",
+            statusActive = isWalkieActive,
+            activeColor = colors.mesh,
+            logoRes = R.drawable.img_logo_itrantra
+        )
 
         // =======================================================
         // INCOMING PAIRING REQUEST APPROVAL BANNER
@@ -304,17 +204,10 @@ fun WalkieScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp), spotColor = AccentBlue.copy(alpha = 0.35f))
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    Color(0xFF0F172A),
-                                    Color(0xFF1E293B)
-                                )
-                            )
-                        )
-                        .border(1.5.dp, AccentBlue, RoundedCornerShape(20.dp))
+                        .shadow(elevation = 8.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.accent.copy(alpha = 0.28f))
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(colors.surface)
+                        .border(1.dp, colors.accent.copy(alpha = 0.45f), RoundedCornerShape(22.dp))
                         .padding(16.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -327,36 +220,32 @@ fun WalkieScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(text = "🤝", fontSize = 18.sp)
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_link,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(17.dp)
+                                )
                                 Text(
-                                    text = "PAIRING REQUEST",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = AccentBlue,
-                                    letterSpacing = 1.sp
+                                    text = "Pairing request",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
                                 )
                             }
 
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(AccentBlueContainer)
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
-                            ) {
-                                Text(
-                                    text = "APPROVAL REQUIRED",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = AccentBlue
-                                )
-                            }
+                            SoftBadge(
+                                text = "Approval needed",
+                                containerColor = colors.accentContainer,
+                                contentColor = colors.accentContainerText
+                            )
                         }
 
                         Text(
-                            text = "${req.fromCallsign} wants to pair with your radio to start sharing Walkie-Talkie voice.",
+                            text = "${req.fromCallsign} wants to pair with your radio to start sharing voice.",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White
+                            color = colors.textSecondary
                         )
 
                         Row(
@@ -367,24 +256,24 @@ fun WalkieScreen(
                                 onClick = { viewModel.rejectPairRequest(req.fromNodeId) },
                                 modifier = Modifier.weight(1f),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFF334155),
-                                    contentColor = Color(0xFFCBD5E1)
+                                    containerColor = colors.cardSecondaryBg,
+                                    contentColor = colors.textSecondary
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             ) {
-                                Text("Decline", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Decline", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
 
                             Button(
                                 onClick = { viewModel.acceptPairRequest(req.fromNodeId) },
                                 modifier = Modifier.weight(1.3f),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MeshGreen,
-                                    contentColor = Color.White
+                                    containerColor = colors.mesh,
+                                    contentColor = colors.onAccent
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(14.dp)
                             ) {
-                                Text("Accept & Pair", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Accept & pair", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -409,12 +298,12 @@ fun WalkieScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isMismatch) Color(0xFFFEF3C7) else Color(0xFFEFF6FF))
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (isMismatch) colors.rescueContainer else colors.accentContainer)
                         .border(
                             width = 1.dp,
-                            color = if (isMismatch) Color(0xFFF59E0B) else Color(0xFF3B82F6),
-                            shape = RoundedCornerShape(16.dp)
+                            color = if (isMismatch) colors.rescue.copy(alpha = 0.4f) else colors.accent.copy(alpha = 0.35f),
+                            shape = RoundedCornerShape(18.dp)
                         )
                         .padding(14.dp)
                 ) {
@@ -423,18 +312,17 @@ fun WalkieScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_warning,
                                 contentDescription = null,
-                                tint = if (isMismatch) Color(0xFFB45309) else Color(0xFF1D4ED8),
-                                modifier = Modifier.size(18.dp)
+                                tint = if (isMismatch) colors.rescueContainerText else colors.accentContainerText,
+                                modifier = Modifier.size(17.dp)
                             )
                             Text(
-                                text = if (isMismatch) "LANGUAGE MISMATCH" else "RADIO NOTICE",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = if (isMismatch) Color(0xFFB45309) else Color(0xFF1D4ED8)
+                                text = if (isMismatch) "Language mismatch" else "Radio notice",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isMismatch) colors.rescueContainerText else colors.accentContainerText
                             )
                         }
 
@@ -442,7 +330,7 @@ fun WalkieScreen(
                             text = warning,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (isMismatch) Color(0xFF78350F) else Color(0xFF1E3A8A)
+                            color = colors.textPrimary
                         )
 
                         // If it's a language mismatch, provide a 1-tap button to sync language with the peer!
@@ -452,17 +340,17 @@ fun WalkieScreen(
                                     viewModel.setSelectedLanguage(SupportedLanguage.fromCode(peerLangCode))
                                 },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFD97706),
-                                    contentColor = Color.White
+                                    containerColor = colors.rescue,
+                                    contentColor = colors.onAccent
                                 ),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
                                 Text(
-                                    text = "Switch to $peerLangName ($peerLangCode) to Match Peer",
+                                    text = "Switch to $peerLangName",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -477,13 +365,13 @@ fun WalkieScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(elevation = 2.dp, shape = RoundedCornerShape(20.dp), spotColor = Color(0x0A000000))
-                .clip(RoundedCornerShape(20.dp))
+                .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
+                .clip(RoundedCornerShape(22.dp))
                 .background(colors.surface)
-                .border(1.dp, colors.outline, RoundedCornerShape(20.dp))
-                .padding(14.dp)
+                .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
+                .padding(16.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -495,31 +383,30 @@ fun WalkieScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .clip(CircleShape)
-                                .background(colors.accent.copy(alpha = 0.15f)),
+                                .background(colors.accentContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = selectedLanguage.nativeInitial,
                                 fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.accent
                             )
                         }
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "RADIO DIALECT: ",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
+                                    text = "Radio dialect: ",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
                                     color = colors.textSecondary
                                 )
                                 Text(
                                     text = "${selectedLanguage.englishName} (${selectedLanguage.code.uppercase()})",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                             }
@@ -527,33 +414,33 @@ fun WalkieScreen(
                                 it.iso == selectedLanguage.code || it.languageTag.startsWith(selectedLanguage.code)
                             }?.isInstalled == true
                             Text(
-                                text = if (isInstalled) "✓ Neural Pack Ready" else "⚠ Pack Not Installed (${selectedLanguage.downloadSizeMb} MB)",
+                                text = if (isInstalled) "Neural pack ready" else "Pack not installed · ${selectedLanguage.downloadSizeMb} MB",
                                 fontSize = 11.sp,
-                                fontWeight = if (isInstalled) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isInstalled) Color(0xFF059669) else Color(0xFFD97706)
+                                fontWeight = if (isInstalled) FontWeight.Medium else FontWeight.Normal,
+                                color = if (isInstalled) colors.meshContainerText else colors.rescueContainerText
                             )
                         }
                     }
 
                     Surface(
                         onClick = { showLanguageSheet = true },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = colors.cardSecondaryBg,
                         border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "SWITCH",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = "Switch",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = colors.accent
                             )
                             Spacer(modifier = Modifier.width(3.dp))
-                            Icon(
-                                imageVector = Icons.Default.ExpandMore,
+                            SoftIcon(
+                                resId = R.drawable.ic_soft_chevron_down,
                                 contentDescription = "Switch Language",
                                 tint = colors.accent,
                                 modifier = Modifier.size(14.dp)
@@ -562,7 +449,7 @@ fun WalkieScreen(
                     }
                 }
 
-                HorizontalDivider(color = colors.outline.copy(alpha = 0.5f), thickness = 1.dp)
+                HorizontalDivider(color = colors.outline.copy(alpha = 0.6f), thickness = 1.dp)
 
                 // 1-Tap Dialect Chips: Hindi, English, Bengali, Marathi
                 Row(
@@ -586,30 +473,30 @@ fun WalkieScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (isLangActive) colors.accent else colors.cardSecondaryBg)
                                 .border(
                                     width = 1.dp,
                                     color = if (isLangActive) colors.accent else colors.outline,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                                 .clickable { viewModel.setSelectedLanguage(lang) }
-                                .padding(vertical = 7.dp),
+                                .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = lang.englishName,
                                     fontSize = 11.sp,
-                                    fontWeight = if (isLangActive) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isLangActive) Color.White else colors.textPrimary
+                                    fontWeight = if (isLangActive) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isLangActive) colors.onAccent else colors.textPrimary
                                 )
                                 if (isInstalled) {
                                     Text(
-                                        text = "READY",
+                                        text = "Ready",
                                         fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isLangActive) Color(0xFFA7F3D0) else Color(0xFF059669)
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isLangActive) colors.onAccent.copy(alpha = 0.8f) else colors.meshContainerText
                                     )
                                 }
                             }
@@ -625,104 +512,42 @@ fun WalkieScreen(
         if (!isWalkieActive) {
             Box(
                 modifier = Modifier
-                    .size(246.dp)
+                    .size(250.dp)
                     .padding(vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 // Outermost soft breathing pulse halo
                 Box(
                     modifier = Modifier
-                        .size(244.dp)
+                        .size(238.dp)
                         .scale(ringScale)
                         .alpha(ringAlpha)
                         .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(Color(0x3038BDF8), Color(0x100284C7), Color.Transparent)
-                            )
-                        )
+                        .background(Brush.radialGradient(listOf(colors.accent.copy(alpha = 0.16f), Color.Transparent)))
                 )
 
-                // Middle radar reference ring with cardinal markers
+                // Middle radar reference ring
                 Box(
                     modifier = Modifier
-                        .size(212.dp)
+                        .size(218.dp)
                         .clip(CircleShape)
-                        .border(1.5.dp, Color(0x2838BDF8), CircleShape)
+                        .border(1.dp, colors.outline, CircleShape)
                 )
 
-                // 4 Cardinal Micro-Ticks
-                Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp).size(width = 2.dp, height = 6.dp).background(Color(0xFF94A3B8), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).size(width = 2.dp, height = 6.dp).background(Color(0xFF94A3B8), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 18.dp).size(width = 6.dp, height = 2.dp).background(Color(0xFF94A3B8), RoundedCornerShape(1.dp)))
-                Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 18.dp).size(width = 6.dp, height = 2.dp).background(Color(0xFF94A3B8), RoundedCornerShape(1.dp)))
-
-                // Highlighted Hero Tactile Button (Major Action)
-                Surface(
+                // SoftHeroDome as the major action
+                SoftHeroDome(
+                    iconRes = R.drawable.ic_soft_radio,
+                    title = "Join walkie",
+                    subLabel = "Off-grid team voice",
                     onClick = { viewModel.toggleWalkieMaster(true) },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    interactionSource = buttonInteractionSource,
-                    shadowElevation = 10.dp,
-                    modifier = Modifier
-                        .size(178.dp)
-                        .scale(buttonPressScale)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFF38BDF8),
-                                        Color(0xFF2563EB),
-                                        Color(0xFF1D4ED8),
-                                        Color(0xFF0F172A)
-                                    )
-                                )
-                            )
-                            .border(
-                                width = 3.dp,
-                                brush = Brush.verticalGradient(
-                                    listOf(Color(0x99FFFFFF), Color(0x25FFFFFF))
-                                ),
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Radio,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.95f),
-                                    modifier = Modifier.size(34.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "JOIN WALKIE",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.1.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = "OFF-GRID TEAM VOICE",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = Color.White.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                }
+                    domeSize = 184.dp,
+                    containerColor = colors.accent,
+                    deepColor = colors.accentDeep,
+                    glowColor = colors.accent,
+                    contentColor = colors.onAccent,
+                    pulsing = false,
+                    modifier = Modifier.scale(buttonPressScale)
+                )
             }
 
             // Trust Badges underneath the standby hero
@@ -731,20 +556,12 @@ fun WalkieScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                listOf("100% Offline", "Direct Mesh Voice", "Zero Mobile Data").forEach { feature ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.cardSecondaryBg)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = feature,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textSecondary
-                        )
-                    }
+                listOf("100% offline", "Direct mesh voice", "Zero mobile data").forEach { feature ->
+                    SoftBadge(
+                        text = feature,
+                        containerColor = colors.cardSecondaryBg,
+                        contentColor = colors.textSecondary
+                    )
                 }
             }
         }
@@ -757,7 +574,7 @@ fun WalkieScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(24.dp), spotColor = Color(0x0C000000))
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(24.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(24.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(24.dp))
@@ -773,42 +590,17 @@ fun WalkieScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(AccentBlueContainer)
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "TEAM VOICE ROOM",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AccentBlue
-                            )
-                        }
+                        SoftBadge(
+                            text = "Team voice room",
+                            containerColor = colors.accentContainer,
+                            contentColor = colors.accentContainerText
+                        )
 
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isWalkieLinkActive) BadgeMintContainer else colors.cardSecondaryBg)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isWalkieLinkActive) Color(0xFF059669) else colors.textSecondary)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text(
-                                    text = if (isWalkieLinkActive) "DIRECT LINK ACTIVE" else "SEARCHING FOR TEAM",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isWalkieLinkActive) BadgeMintText else colors.textSecondary
-                                )
-                            }
-                        }
+                        SoftBadge(
+                            text = if (isWalkieLinkActive) "Direct link active" else "Searching for team",
+                            containerColor = if (isWalkieLinkActive) colors.badgeMintContainer else colors.cardSecondaryBg,
+                            contentColor = if (isWalkieLinkActive) colors.badgeMintText else colors.textSecondary
+                        )
                     }
 
                     // Voice Equalizer / PTT Central Disc (Supports HOLD TO TALK via pointerInput)
@@ -828,8 +620,8 @@ fun WalkieScreen(
                                     .alpha(ringAlpha)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isReceivingAudio) AccentBlue.copy(alpha = 0.22f)
-                                        else MeshGreen.copy(alpha = 0.25f)
+                                        if (isReceivingAudio) colors.accent.copy(alpha = 0.20f)
+                                        else colors.mesh.copy(alpha = 0.22f)
                                     )
                             )
                         }
@@ -838,23 +630,23 @@ fun WalkieScreen(
                         Box(
                             modifier = Modifier
                                 .size(108.dp)
-                                .shadow(elevation = 6.dp, shape = CircleShape, spotColor = AccentBlue.copy(alpha = 0.3f))
+                                .shadow(elevation = 8.dp, shape = CircleShape, spotColor = colors.accent.copy(alpha = 0.28f))
                                 .clip(CircleShape)
                                 .background(
                                     when {
-                                        isMicMuted -> Brush.radialGradient(listOf(Color(0xFFFEF2F2), Color(0xFFFCA5A5)))
-                                        isLiveTx -> Brush.radialGradient(listOf(MeshGreen, Color(0xFF047857)))
-                                        isReceivingAudio -> Brush.radialGradient(listOf(Color(0xFF38BDF8), Color(0xFF1D4ED8)))
-                                        else -> Brush.radialGradient(listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)))
+                                        isMicMuted -> Brush.radialGradient(listOf(colors.sosContainer, colors.sosContainer.copy(alpha = 0.7f)))
+                                        isLiveTx -> Brush.radialGradient(listOf(colors.mesh, colors.meshDeep))
+                                        isReceivingAudio -> Brush.radialGradient(listOf(colors.accent, colors.accentDeep))
+                                        else -> Brush.radialGradient(listOf(colors.accent, colors.accentDeep))
                                     }
                                 )
                                 .border(
-                                    width = 2.5.dp,
+                                    width = 2.dp,
                                     color = when {
-                                        isMicMuted -> SosRed
-                                        isLiveTx -> Color(0xFFA7F3D0)
-                                        isReceivingAudio -> Color(0xFFBAE6FD)
-                                        else -> Color.White
+                                        isMicMuted -> colors.error
+                                        isLiveTx -> colors.onAccent.copy(alpha = 0.7f)
+                                        isReceivingAudio -> colors.onAccent.copy(alpha = 0.7f)
+                                        else -> colors.onAccent.copy(alpha = 0.55f)
                                     },
                                     shape = CircleShape
                                 )
@@ -872,51 +664,41 @@ fun WalkieScreen(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = when {
-                                    isMicMuted -> Icons.Default.MicOff
-                                    isLiveTx -> Icons.Default.GraphicEq
-                                    isReceivingAudio -> Icons.AutoMirrored.Filled.VolumeUp
-                                    else -> Icons.Default.Mic
+                            SoftIcon(
+                                resId = when {
+                                    isMicMuted -> R.drawable.ic_soft_mic_off
+                                    isLiveTx -> R.drawable.ic_soft_eq
+                                    isReceivingAudio -> R.drawable.ic_soft_volume
+                                    else -> R.drawable.ic_soft_mic
                                 },
                                 contentDescription = "Push to Talk",
-                                tint = if (isMicMuted) SosRedDark else Color.White,
-                                modifier = Modifier.size(44.dp)
+                                tint = if (isMicMuted) colors.sosContainerText else colors.onAccent,
+                                modifier = Modifier.size(40.dp)
                             )
                         }
                     }
 
                     // Dynamic Transmission Status Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                when {
-                                    isMicMuted -> Color(0xFFFEE2E2)
-                                    isReceivingAudio -> Color(0xFFEFF6FF)
-                                    isLiveTx -> Color(0xFFECFDF5)
-                                    else -> Color(0xFFEFF6FF)
-                                }
-                            )
-                            .padding(horizontal = 14.dp, vertical = 5.dp)
-                    ) {
-                        Text(
-                            text = when {
-                                isMicMuted -> "MIC MUTED • TAP UNMUTE TO SPEAK"
-                                isReceivingAudio -> "RECEIVING LIVE VOICE..."
-                                isLiveTx -> if (isPttActive) "TRANSMITTING LIVE VOICE (PTT HELD)" else "TRANSMITTING LIVE VOICE..."
-                                else -> "HOLD DISC TO TALK • OR SPEAK FREELY"
-                            },
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = when {
-                                isMicMuted -> SosRedDark
-                                isReceivingAudio -> AccentBlue
-                                isLiveTx -> MeshGreenText
-                                else -> AccentBlue
-                            }
-                        )
-                    }
+                    SoftBadge(
+                        text = when {
+                            isMicMuted -> "Mic muted — unmute to speak"
+                            isReceivingAudio -> "Receiving live voice…"
+                            isLiveTx -> if (isPttActive) "Transmitting (PTT held)" else "Transmitting…"
+                            else -> "Hold the disc to talk, or speak freely"
+                        },
+                        containerColor = when {
+                            isMicMuted -> colors.sosContainer
+                            isReceivingAudio -> colors.accentContainer
+                            isLiveTx -> colors.meshContainer
+                            else -> colors.accentContainer
+                        },
+                        contentColor = when {
+                            isMicMuted -> colors.sosContainerText
+                            isReceivingAudio -> colors.accentContainerText
+                            isLiveTx -> colors.meshContainerText
+                            else -> colors.accentContainerText
+                        }
+                    )
 
                     // Live 24-Bar Equalizer Audio Spectrum Visualizer
                     Row(
@@ -942,10 +724,10 @@ fun WalkieScreen(
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(
                                         when {
-                                            isMicMuted -> Color(0xFFE2E8F0)
-                                            isReceivingAudio -> AccentBlue
-                                            isLiveTx -> MeshGreen
-                                            else -> AccentBlue.copy(alpha = 0.35f)
+                                            isMicMuted -> colors.outlineStrong
+                                            isReceivingAudio -> colors.accent
+                                            isLiveTx -> colors.mesh
+                                            else -> colors.accent.copy(alpha = 0.30f)
                                         }
                                     )
                             )
@@ -969,57 +751,65 @@ fun WalkieScreen(
                         // 1. Mic Mute / Unmute Button
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Surface(
                                 onClick = { viewModel.toggleMicMute() },
                                 shape = CircleShape,
-                                color = if (isMicMuted) colors.errorContainer else colors.cardSecondaryBg,
-                                shadowElevation = 3.dp,
+                                color = if (isMicMuted) colors.sosContainer else colors.cardSecondaryBg,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isMicMuted) colors.error.copy(alpha = 0.35f) else colors.outline
+                                ),
+                                shadowElevation = 0.dp,
                                 modifier = Modifier.size(58.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                    SoftIcon(
+                                        resId = if (isMicMuted) R.drawable.ic_soft_mic_off else R.drawable.ic_soft_mic,
                                         contentDescription = "Mute Mic",
-                                        tint = if (isMicMuted) colors.error else colors.textPrimary,
-                                        modifier = Modifier.size(26.dp)
+                                        tint = if (isMicMuted) colors.sosContainerText else colors.textPrimary,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
                             Text(
-                                text = if (isMicMuted) "Unmute" else "Mute Mic",
+                                text = if (isMicMuted) "Unmute" else "Mute mic",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isMicMuted) colors.error else colors.textSecondary
+                                fontWeight = FontWeight.Medium,
+                                color = if (isMicMuted) colors.sosContainerText else colors.textSecondary
                             )
                         }
 
                         // 2. Speakerphone Toggle Button
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Surface(
                                 onClick = { viewModel.toggleSpeakerphone() },
                                 shape = CircleShape,
-                                color = if (isSpeakerphoneOn) colors.badgeBlueContainer else colors.cardSecondaryBg,
-                                shadowElevation = 3.dp,
+                                color = if (isSpeakerphoneOn) colors.accentContainer else colors.cardSecondaryBg,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSpeakerphoneOn) colors.accent.copy(alpha = 0.35f) else colors.outline
+                                ),
+                                shadowElevation = 0.dp,
                                 modifier = Modifier.size(58.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isSpeakerphoneOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.Hearing,
+                                    SoftIcon(
+                                        resId = if (isSpeakerphoneOn) R.drawable.ic_soft_volume else R.drawable.ic_soft_hearing,
                                         contentDescription = "Speaker",
                                         tint = if (isSpeakerphoneOn) colors.accent else colors.textPrimary,
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = if (isSpeakerphoneOn) "Speaker" else "Earpiece",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.textSecondary
                             )
                         }
@@ -1027,35 +817,33 @@ fun WalkieScreen(
                         // 3. Call-Like Red "End / Disconnect" Button
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Surface(
                                 onClick = { viewModel.toggleWalkieMaster(false) },
                                 shape = CircleShape,
                                 color = Color.Transparent,
-                                shadowElevation = 8.dp,
+                                shadowElevation = 0.dp,
                                 modifier = Modifier.size(58.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(
-                                            Brush.radialGradient(listOf(Color(0xFFEF4444), Color(0xFFDC2626)))
-                                        ),
+                                        .background(Brush.radialGradient(listOf(colors.error, colors.sosDeep))),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CallEnd,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_call_end,
                                         contentDescription = "Disconnect Walkie",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(28.dp)
+                                        tint = colors.onAccent,
+                                        modifier = Modifier.size(26.dp)
                                     )
                                 }
                             }
                             Text(
                                 text = "Disconnect",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Medium,
                                 color = colors.error
                             )
                         }
@@ -1069,7 +857,7 @@ fun WalkieScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(22.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1086,37 +874,34 @@ fun WalkieScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "LIVE TRANSCRIPTION",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = colors.textSecondary
+                                text = "Live transcription",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textPrimary
                             )
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(BadgeMintContainer)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = if (uiState.channelState == RadioChannelState.RECEIVING) "⚡ RECEIVING VOICE"
-                                    else if (isTransmitting || isVadSpeaking || isPttActive) "🎙️ TRANSMITTING"
-                                    else "● STANDBY",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (uiState.channelState == RadioChannelState.RECEIVING) MeshGreenText
-                                    else if (isTransmitting || isVadSpeaking || isPttActive) AccentBlue
-                                    else colors.textSecondary
-                                )
-                            }
+                            SoftBadge(
+                                text = if (uiState.channelState == RadioChannelState.RECEIVING) "Receiving"
+                                else if (isTransmitting || isVadSpeaking || isPttActive) "Transmitting"
+                                else "Standby",
+                                containerColor = when {
+                                    uiState.channelState == RadioChannelState.RECEIVING -> colors.meshContainer
+                                    isTransmitting || isVadSpeaking || isPttActive -> colors.accentContainer
+                                    else -> colors.cardSecondaryBg
+                                },
+                                contentColor = when {
+                                    uiState.channelState == RadioChannelState.RECEIVING -> colors.meshContainerText
+                                    isTransmitting || isVadSpeaking || isPttActive -> colors.accentContainerText
+                                    else -> colors.textSecondary
+                                }
+                            )
                         }
 
                         if (messageLogs.isNotEmpty()) {
                             Text(
                                 text = "${messageLogs.size} logs",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textSecondary
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textTertiary
                             )
                         }
                     }
@@ -1127,25 +912,25 @@ fun WalkieScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (uiState.channelState == RadioChannelState.RECEIVING) MeshGreenContainer.copy(alpha = 0.5f)
+                                    if (uiState.channelState == RadioChannelState.RECEIVING) colors.meshContainer.copy(alpha = 0.5f)
                                     else colors.cardSecondaryBg
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (uiState.channelState == RadioChannelState.RECEIVING) MeshGreen.copy(alpha = 0.5f)
+                                    color = if (uiState.channelState == RadioChannelState.RECEIVING) colors.mesh.copy(alpha = 0.4f)
                                     else colors.outline,
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = RoundedCornerShape(14.dp)
                                 )
                                 .padding(12.dp)
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    text = if (uiState.channelState == RadioChannelState.RECEIVING) "Incoming Speech:" else "Live Caption:",
+                                    text = if (uiState.channelState == RadioChannelState.RECEIVING) "Incoming speech" else "Live caption",
                                     fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (uiState.channelState == RadioChannelState.RECEIVING) MeshGreenText else colors.textSecondary
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (uiState.channelState == RadioChannelState.RECEIVING) colors.meshContainerText else colors.textSecondary
                                 )
                                 Text(
                                     text = transcript,
@@ -1159,14 +944,14 @@ fun WalkieScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(colors.cardSecondaryBg)
                                 .padding(12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Hold central disc or speak to transmit. Transcriptions sync across all radios automatically.",
-                                fontSize = 11.sp,
+                                text = "Hold the central disc or speak to transmit. Transcriptions sync across all radios automatically.",
+                                fontSize = 12.sp,
                                 color = colors.textSecondary,
                                 textAlign = TextAlign.Center
                             )
@@ -1180,9 +965,9 @@ fun WalkieScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (msg.isLocal) AccentBlueContainer.copy(alpha = 0.35f) else MeshGreenContainer.copy(alpha = 0.35f))
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (msg.isLocal) colors.accentContainer.copy(alpha = 0.4f) else colors.meshContainer.copy(alpha = 0.4f))
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1190,8 +975,8 @@ fun WalkieScreen(
                                         Text(
                                             text = if (msg.isLocal) "You (${msg.senderCallsign})" else msg.senderCallsign,
                                             fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (msg.isLocal) AccentBlue else MeshGreenText
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (msg.isLocal) colors.accentContainerText else colors.meshContainerText
                                         )
                                         Text(
                                             text = msg.text,
@@ -1213,7 +998,7 @@ fun WalkieScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(22.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1226,25 +1011,16 @@ fun WalkieScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "PAIRED TEAM RADIOS ($connectedPairedCount OF ${pairedDevices.size} CONNECTED)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                            color = colors.textSecondary
+                            text = "Paired radios (${connectedPairedCount} of ${pairedDevices.size} connected)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
                         )
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.badgeMintContainer)
-                                .padding(horizontal = 7.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "Auto-Mesh Link",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.badgeMintText
-                            )
-                        }
+                        SoftBadge(
+                            text = "Auto-mesh",
+                            containerColor = colors.badgeMintContainer,
+                            contentColor = colors.badgeMintText
+                        )
                     }
 
                     if (pairedDevices.isEmpty()) {
@@ -1259,9 +1035,9 @@ fun WalkieScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(colors.cardSecondaryBg)
-                                .border(0.5.dp, colors.outline, RoundedCornerShape(14.dp))
+                                .border(0.5.dp, colors.outline, RoundedCornerShape(16.dp))
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -1272,18 +1048,18 @@ fun WalkieScreen(
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(12.dp))
                                         .background(colors.badgeBlueContainer),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = when (peer.protocol) {
-                                            TransportProtocol.WIFI_DIRECT -> Icons.Default.Wifi
-                                            else -> Icons.Default.Bluetooth
+                                    SoftIcon(
+                                        resId = when (peer.protocol) {
+                                            TransportProtocol.WIFI_DIRECT -> R.drawable.ic_soft_wifi
+                                            else -> R.drawable.ic_soft_bluetooth
                                         },
                                         contentDescription = null,
-                                        tint = colors.accent,
+                                        tint = colors.badgeBlueText,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -1294,20 +1070,20 @@ fun WalkieScreen(
                                     Text(
                                         text = peer.name,
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = colors.textPrimary
                                     )
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         val signalDesc = when {
-                                            peer.signalStrengthDbm > -65 -> "Strong Signal"
-                                            peer.signalStrengthDbm > -80 -> "Good Signal"
-                                            else -> "Fair Signal"
+                                            peer.signalStrengthDbm > -65 -> "Strong signal"
+                                            peer.signalStrengthDbm > -80 -> "Good signal"
+                                            else -> "Fair signal"
                                         }
                                         Text(
                                             text = if (peer.isConnected) {
-                                                "Connected • $signalDesc"
+                                                "Connected · $signalDesc"
                                             } else {
-                                                "Paired • Out of range"
+                                                "Paired · Out of range"
                                             },
                                             fontSize = 11.sp,
                                             color = if (peer.isConnected) colors.badgeMintText else colors.textSecondary,
@@ -1325,11 +1101,11 @@ fun WalkieScreen(
                             IconButton(
                                 onClick = { viewModel.unpairDevice(peer) }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_trash,
                                     contentDescription = "Unpair",
                                     tint = colors.error.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(17.dp)
                                 )
                             }
                         }
@@ -1343,7 +1119,7 @@ fun WalkieScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(elevation = 2.dp, shape = RoundedCornerShape(22.dp), spotColor = Color(0x0A000000))
+                    .shadow(elevation = 3.dp, shape = RoundedCornerShape(22.dp), spotColor = colors.shadowTint)
                     .clip(RoundedCornerShape(22.dp))
                     .background(colors.surface)
                     .border(1.dp, colors.outline, RoundedCornerShape(22.dp))
@@ -1356,35 +1132,34 @@ fun WalkieScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "AVAILABLE NODES NEARBY (${discoveredDevices.size})",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp,
-                            color = colors.textSecondary
+                            text = "Nearby nodes (${discoveredDevices.size})",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
                         )
 
                         // Interactive Refresh Button with animated spin during scanning
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(colors.cardSecondaryBg)
                                 .clickable { viewModel.refreshDiscoveredNodes() }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 9.dp, vertical = 5.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
+                                SoftIcon(
+                                    resId = R.drawable.ic_soft_refresh,
                                     contentDescription = "Refresh",
                                     tint = colors.accent,
                                     modifier = Modifier
                                         .size(14.dp)
                                         .rotate(if (isRefreshingNodes) refreshRotation else 0f)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = if (isRefreshingNodes) "Scanning..." else "Rescan",
+                                    text = if (isRefreshingNodes) "Scanning…" else "Rescan",
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.accent
                                 )
                             }
@@ -1394,9 +1169,9 @@ fun WalkieScreen(
                     if (discoveredDevices.isEmpty()) {
                         Text(
                             text = if (isRefreshingNodes) {
-                                "Scanning for BLE + Wi-Fi Direct nodes in range..."
+                                "Scanning for BLE + Wi-Fi Direct nodes in range…"
                             } else {
-                                "No nodes in range yet. Both phones must have Walkie Mesh active."
+                                "No nodes in range yet. Both phones must have Walkie mesh active."
                             },
                             fontSize = 12.sp,
                             color = colors.textSecondary
@@ -1410,9 +1185,9 @@ fun WalkieScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(colors.cardSecondaryBg)
-                                .border(0.5.dp, colors.outline, RoundedCornerShape(14.dp))
+                                .border(0.5.dp, colors.outline, RoundedCornerShape(16.dp))
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -1421,16 +1196,16 @@ fun WalkieScreen(
                                 Text(
                                     text = peer.name,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = colors.textPrimary
                                 )
                                 val signalDesc = when {
-                                    peer.signalStrengthDbm > -65 -> "Strong Signal"
-                                    peer.signalStrengthDbm > -80 -> "Good Signal"
-                                    else -> "Fair Signal"
+                                    peer.signalStrengthDbm > -65 -> "Strong signal"
+                                    peer.signalStrengthDbm > -80 -> "Good signal"
+                                    else -> "Fair signal"
                                 }
                                 Text(
-                                    text = "Radio Mesh • $signalDesc",
+                                    text = "Radio mesh · $signalDesc",
                                     fontSize = 11.sp,
                                     color = colors.textSecondary
                                 )
@@ -1441,24 +1216,25 @@ fun WalkieScreen(
                                 enabled = !isPending,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isPending) colors.outline else colors.accent,
-                                    contentColor = Color.White,
+                                    contentColor = colors.onAccent,
                                     disabledContainerColor = colors.cardSecondaryBg,
                                     disabledContentColor = colors.textSecondary
                                 ),
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 modifier = Modifier.height(34.dp)
                             ) {
                                 if (isPending) {
-                                    Text("Requesting...", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("Requesting…", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                 } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
+                                    SoftIcon(
+                                        resId = R.drawable.ic_soft_add,
                                         contentDescription = null,
+                                        tint = colors.onAccent,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Pair", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Pair", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -1475,102 +1251,85 @@ fun WalkieScreen(
     // =======================================================
     if (showLanguageSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(
-            onDismissRequest = { showLanguageSheet = false },
-            sheetState = sheetState,
-            containerColor = colors.surface,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        SoftSheetShell(
+            title = "Radio language",
+            subtitle = "Pick the language for voice and transcription",
+            onDismiss = { showLanguageSheet = false }
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Select Walkie Dialect",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    IconButton(onClick = { showLanguageSheet = false }) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = colors.textSecondary)
-                    }
-                }
-
-                OutlinedTextField(
-                    value = languageSearchQuery,
-                    onValueChange = { languageSearchQuery = it },
-                    placeholder = { Text("Search language or dialect...", fontSize = 13.sp) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+            OutlinedTextField(
+                value = languageSearchQuery,
+                onValueChange = { languageSearchQuery = it },
+                placeholder = { Text("Search language or dialect…", fontSize = 13.sp, color = colors.textTertiary) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = SoftFieldShape,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.outline,
+                    focusedContainerColor = colors.cardSecondaryBg,
+                    unfocusedContainerColor = colors.cardSecondaryBg
                 )
+            )
 
-                val filtered = remember(languageSearchQuery) {
-                    if (languageSearchQuery.isBlank()) SupportedLanguage.entries
-                    else {
-                        val q = languageSearchQuery.trim().lowercase()
-                        SupportedLanguage.entries.filter {
-                            it.englishName.lowercase().contains(q) ||
+            Spacer(modifier = Modifier.height(4.dp))
+
+            val filtered = remember(languageSearchQuery) {
+                if (languageSearchQuery.isBlank()) SupportedLanguage.entries
+                else {
+                    val q = languageSearchQuery.trim().lowercase()
+                    SupportedLanguage.entries.filter {
+                        it.englishName.lowercase().contains(q) ||
                             it.nativeName.lowercase().contains(q) ||
                             it.code.lowercase().contains(q)
-                        }
                     }
                 }
+            }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 380.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(filtered) { lang ->
-                        val isSelected = selectedLanguage == lang
-                        val isInstalled = modelPacks.firstOrNull {
-                            it.iso == lang.code || it.languageTag.startsWith(lang.code)
-                        }?.isInstalled == true
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filtered) { lang ->
+                    val isSelected = selectedLanguage == lang
+                    val isInstalled = modelPacks.firstOrNull {
+                        it.iso == lang.code || it.languageTag.startsWith(lang.code)
+                    }?.isInstalled == true
 
-                        Surface(
-                            onClick = {
-                                viewModel.setSelectedLanguage(lang)
-                                showLanguageSheet = false
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) colors.accent.copy(alpha = 0.12f) else colors.cardSecondaryBg,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) colors.accent else colors.outline
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                    Surface(
+                        onClick = {
+                            viewModel.setSelectedLanguage(lang)
+                            showLanguageSheet = false
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) colors.accentContainer else colors.cardSecondaryBg,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) colors.accent.copy(alpha = 0.5f) else colors.outline
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "${lang.englishName} (${lang.nativeName})",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = if (isSelected) colors.accent else colors.textPrimary
-                                    )
-                                    Text(
-                                        text = if (isInstalled) "✓ Installed & Ready" else "Neural Pack: ${lang.downloadSizeMb} MB",
-                                        fontSize = 11.sp,
-                                        color = if (isInstalled) Color(0xFF059669) else colors.textSecondary
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = colors.accent)
-                                }
+                            Column {
+                                Text(
+                                    text = "${lang.englishName} (${lang.nativeName})",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = if (isSelected) colors.accentContainerText else colors.textPrimary
+                                )
+                                Text(
+                                    text = if (isInstalled) "Installed & ready" else "Neural pack · ${lang.downloadSizeMb} MB",
+                                    fontSize = 11.sp,
+                                    color = if (isInstalled) colors.meshContainerText else colors.textSecondary
+                                )
+                            }
+                            if (isSelected) {
+                                SoftStatusDot(color = colors.accent, dotSize = 8.dp)
                             }
                         }
                     }

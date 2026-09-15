@@ -15,23 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.outlined.CellTower
-import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,30 +27,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.itantra.app.ui.theme.AccentBlue
-import com.itantra.app.ui.theme.AccentBlueContainer
+import com.itantra.app.R
+import com.itantra.app.ui.components.soft.SoftIcon
 import com.itantra.app.ui.theme.MinimalColorsInstance
-import com.itantra.app.ui.theme.SosRed
 
 enum class MissionDestination(
     val route: String,
     val title: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val iconRes: Int
 ) {
-    SOS("sos", "SOS", Icons.Default.WarningAmber, Icons.Outlined.WarningAmber),
-    WALKIE("walkie", "Walkie", Icons.Default.Mic, Icons.Outlined.Mic),
-    RESCUE("rescue", "Rescue", Icons.Default.NotificationsActive, Icons.Outlined.CellTower),
-    SETTINGS("settings", "Settings", Icons.Default.Settings, Icons.Outlined.Settings)
+    SOS("sos", "SOS", R.drawable.ic_soft_siren),
+    WALKIE("walkie", "Walkie", R.drawable.ic_soft_radio),
+    RESCUE("rescue", "Rescue", R.drawable.ic_soft_tower),
+    SETTINGS("settings", "Settings", R.drawable.ic_soft_settings)
 }
 
 /**
  * 4-Tab Bottom Navigation Bar (SOS • Walkie • Rescue • Settings).
- * Clean bright surface with soft border and high-contrast active indicator pills.
+ * Soft surface, hairline divider, tinted pill selection.
  */
 @Composable
 fun MissionBottomNav(
@@ -87,31 +71,21 @@ fun MissionBottomNav(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
             MissionDestination.entries.forEach { destination ->
                 val isSelected = currentDestination == destination
 
-                val iconColor by animateColorAsState(
+                val itemColor by animateColorAsState(
                     targetValue = when {
                         isSelected && destination == MissionDestination.SOS -> colors.error
                         isSelected -> colors.accent
                         else -> colors.textSecondary
                     },
-                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-                    label = "navIconColor"
-                )
-
-                val labelColor by animateColorAsState(
-                    targetValue = when {
-                        isSelected && destination == MissionDestination.SOS -> colors.error
-                        isSelected -> colors.accent
-                        else -> colors.textSecondary
-                    },
-                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-                    label = "navTextColor"
+                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                    label = "navItemColor"
                 )
 
                 val pillColor by animateColorAsState(
@@ -120,13 +94,13 @@ fun MissionBottomNav(
                         isSelected -> colors.accentContainer
                         else -> Color.Transparent
                     },
-                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
                     label = "pillColor"
                 )
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -140,17 +114,17 @@ fun MissionBottomNav(
                     ) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(pillColor)
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                                .padding(horizontal = 18.dp, vertical = 6.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             BadgedBox(
                                 badge = {
                                     if (destination == MissionDestination.RESCUE && alertCount > 0) {
                                         Badge(
-                                            containerColor = SosRed,
-                                            contentColor = Color.White
+                                            containerColor = colors.error,
+                                            contentColor = colors.onError
                                         ) {
                                             Text(
                                                 text = if (alertCount > 9) "9+" else "$alertCount",
@@ -161,23 +135,23 @@ fun MissionBottomNav(
                                     }
                                 }
                             ) {
-                                Icon(
-                                    imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
+                                SoftIcon(
+                                    resId = destination.iconRes,
                                     contentDescription = destination.title,
-                                    tint = iconColor,
+                                    tint = itemColor,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
 
                         Text(
                             text = destination.title,
                             fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            letterSpacing = 0.2.sp,
-                            color = labelColor
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            letterSpacing = 0.1.sp,
+                            color = itemColor
                         )
                     }
                 }

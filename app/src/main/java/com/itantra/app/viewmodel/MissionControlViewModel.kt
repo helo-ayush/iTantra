@@ -182,6 +182,31 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         Log.i(voicePipelineTag, "[$stage] $message")
     }
 
+    /**
+     * Log-only mesh diagnostics dump. Emits the active mode, both user-owned
+     * radio flags, the hardware adapter/location state, visible peer counts and
+     * the BLE radio snapshot. No control flow depends on this; it exists so the
+     * "SOS not visible in Rescue" bug can be diagnosed from device logs before
+     * any behavior change. Called on every radio/mode transition.
+     */
+    private fun logMeshDiagnostics(reason: String) {
+        val mode = when {
+            _isSosBroadcasting.value -> "SOS"
+            _isRescueActive.value -> "RESCUE"
+            _isWalkieActive.value -> "WALKIE"
+            else -> "IDLE"
+        }
+        val ble = bleMeshManager?.radioDiagnostics() ?: "ble[unavailable]"
+        val p2p = wifiDirectMeshManager?.p2pDiagnostics() ?: "p2p[unavailable]"
+        logVoice(
+            "diag",
+            "meshDiag($reason) mode=$mode " +
+                "appBt=${_bluetoothEnabled.value} appWifi=${_wifiDirectEnabled.value} " +
+                "adapterBt=${bleMeshManager?.isBluetoothEnabled()} loc=${bleMeshManager?.isLocationEnabled()} " +
+                "victims=${_activeDistressVictims.value.size} rescuers=${_nearbyRescuers.value.size} $ble $p2p"
+        )
+    }
+
     /** Decides which captured frames go on the air and owns the frame sequence. */
     private val voiceStreamGate = VoiceStreamGate()
 
@@ -193,6 +218,24 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     /** Direct peer IPs learned from inbound UDP datagrams (unicast fallback). */
     private val peerAddressBook = DirectPeerAddressBook()
+
+    /**
+     * Last time each node was heard over BLE. Wi-Fi Direct reaches much further
+     * but cannot range a peer, so BLE recency is the only signal we have for
+     * "is this node close enough for GATT" — see [peerInBleRange].
+     */
+    private val lastBleBeaconSeenMs = ConcurrentHashMap<Long, Long>()
+
+    /**
+     * Presence adverts received over the UDP mesh, synthesised into
+     * [DiscoveredBeacon]s so the existing beacon→UI mapping is reused verbatim.
+     * Merged with the live BLE list in [refreshMergedPeerLists], where BLE wins
+     * for any node it can also hear.
+     */
+    private val udpBeacons = ConcurrentHashMap<Long, DiscoveredBeacon>()
+
+    /** Most recent raw BLE scan result, kept so UDP merges do not lose it. */
+    private var latestBleBeacons: List<DiscoveredBeacon> = emptyList()
 
     /**
      * Outbound live-audio queue: the capture thread must never block on socket
@@ -461,6 +504,9 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     /** Periodic Wi-Fi Direct long-range discovery loop while any mesh mode is on. */
     private var wifiDirectScanJob: Job? = null
 
+    /** Periodic long-range presence advert over the UDP mesh (SOS + Rescue). */
+    private var udpPresenceJob: Job? = null
+
     // Scan-driven: populated from non-distress iTantra beacons + link requests.
     private val _nearbyRescuers = MutableStateFlow<List<RescuerNode>>(emptyList())
     val nearbyRescuers: StateFlow<List<RescuerNode>> = _nearbyRescuers.asStateFlow()
@@ -496,8 +542,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _wifiDirectEnabled.value = enabled
         val mesh = wifiDirectMeshManager
         if (enabled) {
-            // Become the group owner so rescuers can join and reach us over UDP.
-            mesh?.createGroup()
+            // Bring the UDP mesh up so it is listening the moment a group forms.
+            // Group formation itself belongs to the discovery loop (see
+            // syncWifiDirectScan): forming one eagerly here would make this
+            // device a permanent group owner that can never join a peer.
             mesh?.startUdpBroadcast()
         } else {
             mesh?.removeGroup()
@@ -505,6 +553,8 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         }
         // Re-sync the active mode: BLE alone carries everything while this is off.
         syncWifiDirectScan()
+        syncUdpPresenceTelemetry()
+        logMeshDiagnostics("toggleWifiDirect=$enabled")
     }
 
     fun toggleBluetooth(enabled: Boolean) {
@@ -520,6 +570,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         }
         // Re-sync the active mode: Wi-Fi Direct alone carries everything while this is off.
         syncWifiDirectScan()
+        logMeshDiagnostics("toggleBluetooth=$enabled")
     }
 
     private fun currentBeaconTxPower(): BeaconTxPower {
@@ -533,7 +584,12 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     /** Starts foreground keeper service and initiates BLE beacon advertising. */
     private fun startBeaconAdvertising(payload: DistressBeaconPayload) {
-        val power = currentBeaconTxPower()
+        // A distress beacon's job is to be found, so it always advertises at the
+        // highest TX power. The user-facing "Balanced (500m)" default maps to
+        // ADVERTISE_TX_POWER_MEDIUM (see currentBeaconTxPower), which cut real
+        // SOS detection to roughly BLE-medium indoor range (~10m). Non-distress
+        // beacons keep the user's battery/range setting.
+        val power = if (payload.isDistress) BeaconTxPower.HIGH else currentBeaconTxPower()
         try {
             TacticalMeshService.start(getApplication(), payload, power)
         } catch (_: Exception) {
@@ -590,11 +646,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     /**
      * Battery-friendly periodic Wi-Fi Direct long-range discovery. While any
      * mesh mode is active and Wi-Fi Direct is enabled, discovery re-runs on a
-     * slow [WIFI_DIRECT_SCAN_INTERVAL_MS] loop and the refreshed peer list is
-     * folded into the walkie device list. Idempotent: re-sync calls while the
-     * job is already in the desired state are no-ops, so 1 Hz GPS ticks that
-     * re-trigger [syncBeaconAdvertising] never reset the scan cadence.
-     * BLE remains the always-on near-field scan and is not affected here.
+     * slow [WIFI_DIRECT_SCAN_INTERVAL_MS] loop, the refreshed peer list is
+     * folded into the walkie device list, and the device joins a discovered
+     * group so the UDP mesh actually has a shared subnet to run on.
+     *
+     * Idempotent: re-sync calls while the job is already in the desired state
+     * are no-ops, so 1 Hz GPS ticks that re-trigger [syncBeaconAdvertising]
+     * never reset the scan cadence. BLE remains the always-on near-field scan
+     * and is not affected here.
      */
     private fun syncWifiDirectScan() {
         val shouldScan = (_isSosBroadcasting.value || _isRescueActive.value || _isWalkieActive.value) &&
@@ -612,11 +671,124 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             return
         }
         wifiDirectScanJob = viewModelScope.launch {
+            var cyclesWithoutGroup = 0
+            var firstCycle = true
             while (isActive) {
-                wifiDirectMeshManager?.startDiscovery()
-                delay(WIFI_DIRECT_SCAN_INTERVAL_MS)
-                wifiDirectMeshManager?.requestPeers()
+                val mesh = wifiDirectMeshManager
+                if (mesh?.isGroupFormed?.value == true) {
+                    // The long-range link already exists. Re-running discovery
+                    // while grouped destabilises the group on several chipsets
+                    // and finds nothing anyway — a group member is not
+                    // discoverable. From here the UDP presence cadence is what
+                    // keeps reaching far peers, so just hold the group.
+                    refreshWalkieDevicesList()
+                    delay(WIFI_DIRECT_GROUPED_TICK_MS)
+                    continue
+                }
+                mesh?.startDiscovery()
+                // The first sweep is short so a group forms within ~10s of the
+                // user entering a mode, not after a full battery-friendly cycle.
+                delay(if (firstCycle) WIFI_DIRECT_FIRST_SCAN_MS else WIFI_DIRECT_SCAN_INTERVAL_MS)
+                firstCycle = false
+                mesh?.requestPeers()
+                // PEERS_CHANGED arrives asynchronously after discovery stops;
+                // give it a beat before deciding there is nobody to join.
+                delay(WIFI_DIRECT_PEER_SETTLE_MS)
+
+                val joined = mesh?.joinAnyDiscoveredGroup() == true
+                if (mesh?.isGroupFormed?.value == true) {
+                    cyclesWithoutGroup = 0
+                } else if (!joined) {
+                    // Nobody to join, so become discoverable ourselves. SOS forms
+                    // a group after a single empty cycle and every other role
+                    // waits several: a victim anchors the group early, which is
+                    // what keeps two phones from both ending up as group owners
+                    // (two owners cannot see each other, so neither can join).
+                    val threshold = if (_isSosBroadcasting.value) {
+                        GROUP_FALLBACK_CYCLES_SOS
+                    } else {
+                        GROUP_FALLBACK_CYCLES_PEER
+                    }
+                    if (++cyclesWithoutGroup >= threshold) {
+                        logVoice(
+                            "wifi",
+                            "no P2P peer after " + cyclesWithoutGroup + " empty cycles; forming group (sos=" +
+                                _isSosBroadcasting.value + ")"
+                        )
+                        // A distress device must be findable even when it happens
+                        // to be sitting on an infrastructure Wi-Fi network.
+                        mesh?.createGroup(allowOverLan = _isSosBroadcasting.value)
+                        mesh?.startUdpBroadcast()
+                        cyclesWithoutGroup = 0
+                    }
+                }
                 refreshWalkieDevicesList()
+            }
+        }
+    }
+
+    /**
+     * True while [nodeId] is close enough for BLE to carry the traffic.
+     *
+     * A beacon heard within [BLE_RANGE_WINDOW_MS] is authoritative — it is the
+     * freshest evidence that the peer is physically near. A GATT link on its own
+     * is only trusted while beacons are also still arriving inside
+     * [GATT_LINK_GRACE_MS], or when we have never seen a beacon from that node
+     * at all: Android takes ~20s of supervision timeout to report a link dead
+     * after a peer walks out of range, and routing to that corpse would silently
+     * drop packets that the UDP mesh could still have delivered.
+     *
+     * The short window is deliberately a little wider than the 10s beacon-stale
+     * timeout so transport choice does not flap on a single missed advert.
+     */
+    private fun peerInBleRange(nodeId: Long): Boolean {
+        val now = System.currentTimeMillis()
+        val seen = lastBleBeaconSeenMs[nodeId]
+        if (seen != null && now - seen <= BLE_RANGE_WINDOW_MS) return true
+        if (nodeId in (bleMeshManager?.connectedNodeIds?.value.orEmpty())) {
+            return seen == null || now - seen <= GATT_LINK_GRACE_MS
+        }
+        return false
+    }
+
+    /**
+     * Long-range half of the mesh: while SOS or Rescue is active, this device's
+     * presence advert is repeated over the UDP mesh on a [UDP_PRESENCE_INTERVAL_MS]
+     * cadence. BLE adverts only reach a few tens of metres on stock phones, so
+     * without this a victim and a rescuer that formed a Wi-Fi Direct group
+     * still could not see each other past BLE range.
+     *
+     * UDP only — never [broadcastMeshPacket], which would also push it over GATT
+     * where the BLE beacon already carries the same information.
+     */
+    private fun syncUdpPresenceTelemetry() {
+        val shouldRun = _wifiDirectEnabled.value &&
+            (_isSosBroadcasting.value || _isRescueActive.value)
+        if (!shouldRun) {
+            udpPresenceJob?.cancel()
+            udpPresenceJob = null
+            return
+        }
+        if (udpPresenceJob?.isActive == true) return
+        udpPresenceJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                runCatching {
+                    val payload = if (_isSosBroadcasting.value) {
+                        buildDistressBeaconPayload()
+                    } else {
+                        buildRescuerBeaconPayload()
+                    }
+                    val packet = ItantraPacket(
+                        nodeId = _nodeId.value,
+                        // Telemetry is self-refreshing: ttl 1 keeps peers from
+                        // re-flooding it across the mesh.
+                        ttl = 1,
+                        msgType = PacketFraming.MSG_TYPE_DISTRESS_BEACON,
+                        payload = payload.toManufacturerDataWithId()
+                    )
+                    wifiDirectMeshManager?.broadcastDatagram(PacketFraming.encode(packet))
+                }
+                delay(UDP_PRESENCE_INTERVAL_MS)
             }
         }
     }
@@ -642,10 +814,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         // Real BLE distress beacon (foreground service + in-process fallback).
         syncBeaconAdvertising()
 
-        // Wi-Fi Direct group + UDP mesh so rescuers can send voice-link packets.
-        wifiDirectMeshManager?.createGroup()
+        // Wi-Fi Direct UDP mesh so rescuers can send voice-link packets. Group
+        // formation is deliberately left to syncWifiDirectScan's discovery loop:
+        // it joins a peer's group when one is visible and only forms its own
+        // when nobody is there to join, which is what stops two phones from
+        // ending up as rival group owners that can never see each other.
         wifiDirectMeshManager?.startUdpBroadcast()
         syncWifiDirectScan()
+        syncUdpPresenceTelemetry()
 
         // Listen for rescuer nodes advertising on the mesh while in distress.
         bleMeshManager?.startScanning()
@@ -655,6 +831,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
         // Voice capture only engages if a rescuer has actively linked to this victim
         syncVoiceCaptureState()
+        logMeshDiagnostics("startSos")
     }
 
     fun stopSos() {
@@ -662,18 +839,30 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _isSosBroadcasting.value = false
         _connectedRescuer.value = null
         _nearbyRescuers.value = emptyList()
-        _wifiDirectEnabled.value = false
-        _bluetoothEnabled.value = false
+        // Do NOT clear _wifiDirectEnabled / _bluetoothEnabled here. These are
+        // user-owned radio toggles (only the SOS screen writes them). Every
+        // shutdown path below keys off the mode flags, so radios still power
+        // down; clearing them here left Rescue/Walkie started after an SOS
+        // session deaf and blind (bootRescueSystem gates its scan on
+        // _bluetoothEnabled, syncBeaconAdvertising stops when it is false).
         _isReceivingOneWayBroadcast.value = false
         _uiState.update { it.copy(channelState = RadioChannelState.STANDBY) }
 
         stopAudioBeacon()
-        wifiDirectMeshManager?.removeGroup()
+        // Leave the P2P group only when no other mode still needs the long-range
+        // link; tearing it down under an active Rescue session would blind it to
+        // every UDP-only victim.
+        if (!_isRescueActive.value && !_isWalkieActive.value) {
+            wifiDirectMeshManager?.removeGroup()
+        }
+        udpBeacons.clear()
         stopBleScanIfIdle()
         stopMeshUdpIfIdle()
+        syncUdpPresenceTelemetry()
         syncVoiceCaptureState()
         syncBeaconAdvertising()
         syncWifiDirectScan()
+        logMeshDiagnostics("stopSos")
     }
 
     /**
@@ -705,6 +894,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     fun isLocationEnabled(): Boolean = bleMeshManager?.isLocationEnabled() ?: false
 
     fun onBluetoothStateRestored() {
+        logMeshDiagnostics("btAdapterRestored")
         // A globally disabled Bluetooth radio stays off even after the adapter
         // comes back — Wi-Fi Direct carries everything until the user re-enables it.
         if (!_bluetoothEnabled.value) return
@@ -824,6 +1014,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             _uiState.update { it.copy(channelState = RadioChannelState.STANDBY).clearStatus() }
             updateWalkieLinkState()
         }
+        logMeshDiagnostics(if (active) "walkieOn" else "walkieOff")
     }
 
     fun toggleMicMute() {
@@ -1116,6 +1307,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 wifiDirectMeshManager?.startUdpBroadcast()
             }
             syncWifiDirectScan()
+            syncUdpPresenceTelemetry()
             syncVoiceCaptureState() // Radar scanning: mic stays OFF until call or broadcast is initiated
         } else {
             // Leaving rescue mode: broadcast a close (empty payload = everyone)
@@ -1140,13 +1332,23 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             _victimAlertCount.value = 0
             _isReceivingOneWayBroadcast.value = false
             beaconFirstSeen.clear()
+            udpBeacons.clear()
+            latestBleBeacons = emptyList()
+            lastBleBeaconSeenMs.clear()
             syncVoiceCaptureState()
             stopMeshUdpIfIdle()
             _modelWarningMessage.value = null
             stopBleScanIfIdle()
             syncBeaconAdvertising()
             syncWifiDirectScan()
+            syncUdpPresenceTelemetry()
+            // Leave the P2P group we may have formed as a fallback, but only when
+            // no other mode still needs the long-range link.
+            if (!_isSosBroadcasting.value && !_isWalkieActive.value) {
+                wifiDirectMeshManager?.removeGroup()
+            }
         }
+        logMeshDiagnostics(if (active) "rescueOn" else "rescueOff")
     }
 
     fun toggleBroadcastToAll() {
@@ -1802,16 +2004,93 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         )
     }
 
+    /**
+     * Wraps a presence advert that arrived over the UDP mesh in the same shape
+     * the BLE scanner produces, so the beacon→UI mapping is shared rather than
+     * duplicated. Wi-Fi Direct exposes no RSSI, hence the sentinel signal and
+     * the "unknown" distance used only when neither side has a GPS fix.
+     */
+    private fun DistressBeaconPayload.toSyntheticBeacon(): DiscoveredBeacon = DiscoveredBeacon(
+        nodeId = nodeId,
+        rssi = UDP_ONLY_SIGNAL_DBM,
+        // Only consulted when GPS cannot place the peer; with coordinates the
+        // sentinel RSSI makes fuseGpsAndBleDistance trust GPS instead.
+        estimatedDistanceMeters = UDP_UNRANGED_DISTANCE_METERS.toDouble(),
+        batteryPercent = batteryPercent,
+        latitudeDeg = latitudeDeg,
+        longitudeDeg = longitudeDeg,
+        altitudeMeters = altitudeMeters,
+        languageIso = languageIso,
+        isDistress = isDistress,
+        lastSeenEpochMs = System.currentTimeMillis()
+    )
+
     private fun onBeaconsUpdated(beacons: List<DiscoveredBeacon>) {
+        val now = System.currentTimeMillis()
+        for (beacon in beacons) lastBleBeaconSeenMs[beacon.nodeId] = now
+        latestBleBeacons = beacons
+        refreshMergedPeerLists(alertOnNewVictim = true)
+    }
+
+    /** BLE beacons plus the UDP-only peers, BLE winning any node it can hear. */
+    private fun mergedBeacons(): List<DiscoveredBeacon> {
+        val ble = latestBleBeacons
+        if (udpBeacons.isEmpty()) return ble
+        val bleIds = ble.mapTo(HashSet()) { it.nodeId }
+        return ble + udpBeacons.values.filter { it.nodeId !in bleIds }
+    }
+
+    /**
+     * Drops presence adverts and BLE-recency entries that have gone quiet.
+     *
+     * @return true when something was removed, so callers know the merged lists
+     * need republishing.
+     */
+    private fun pruneStaleMeshMemory(): Boolean {
+        val now = System.currentTimeMillis()
+        var changed = udpBeacons.entries.removeIf { now - it.value.lastSeenEpochMs > UDP_PRESENCE_STALE_MS }
+        changed = lastBleBeaconSeenMs.entries.removeIf { now - it.value > BLE_RANGE_MEMORY_MS } || changed
+        return changed
+    }
+
+    /**
+     * Republishes the victim and rescuer lists from BLE beacons merged with the
+     * long-range UDP presence adverts.
+     *
+     * BLE wins for any node it can also hear: it is the only transport that
+     * carries RSSI, so it is the only one that can range a peer. UDP-only
+     * entries carry the [UDP_ONLY_SIGNAL_DBM] sentinel, which puts
+     * [fuseGpsAndBleDistance] in its "trust GPS" branch — a far peer is placed
+     * by its own coordinates rather than by a fictitious signal strength.
+     */
+    private fun refreshMergedPeerLists(alertOnNewVictim: Boolean = false) {
+        pruneStaleMeshMemory()
+        val beacons = mergedBeacons()
         if (_isRescueActive.value) {
             val currentVictimNodeIds = _activeDistressVictims.value.map { it.nodeId }.toSet()
             val incomingVictims = beacons.filter { it.isDistress }
             val hasNewVictim = incomingVictims.any { it.nodeId !in currentVictimNodeIds }
-            if (hasNewVictim && incomingVictims.isNotEmpty()) {
+            if (alertOnNewVictim && hasNewVictim && incomingVictims.isNotEmpty()) {
                 triggerTacticalAlertVibration()
             }
 
-            val victims = incomingVictims.map { it.toDistressVictim() }
+            val lastKnownDistance = _activeDistressVictims.value.associate { it.nodeId to it.distanceMeters }
+            val victims = incomingVictims.map { beacon ->
+                val victim = beacon.toDistressVictim()
+                // A peer we can no longer range keeps the last distance we did
+                // measure instead of snapping to the "unknown" sentinel: it
+                // walked out of BLE reach, so where we last saw it is a far
+                // better estimate than nothing, and it stops the radar jumping
+                // to the edge on every BLE→Wi-Fi hand-off without a GPS fix.
+                val previous = lastKnownDistance[victim.nodeId]
+                if (victim.distanceMeters == UDP_UNRANGED_DISTANCE_METERS &&
+                    previous != null && previous != UDP_UNRANGED_DISTANCE_METERS
+                ) {
+                    victim.copy(distanceMeters = previous)
+                } else {
+                    victim
+                }
+            }.sortedBy { it.distanceMeters }
             _activeDistressVictims.value = victims
             _victimAlertCount.value = victims.size
             seedVictimCoordinates()
@@ -1971,8 +2250,11 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         // per-node rate-limited and suppressed once their name is cached.
         sendProfileToNodePromptly(packet.nodeId)
 
-        // Multi-hop mesh relay: deduplicate within 3-second window (exempt real-time voice frames)
-        if (packet.msgType != PacketFraming.MSG_TYPE_VOICE_FRAME) {
+        // Multi-hop mesh relay: deduplicate within 3-second window (exempt real-time voice frames
+        // and periodic presence telemetry, which is self-refreshing and must never be re-flooded)
+        if (packet.msgType != PacketFraming.MSG_TYPE_VOICE_FRAME &&
+            packet.msgType != PacketFraming.MSG_TYPE_DISTRESS_BEACON
+        ) {
             val packetSignature = ((packet.nodeId xor (packet.msgType.toLong() shl 16)) xor packet.payload.contentHashCode().toLong())
             val now = System.currentTimeMillis()
             val isDuplicate = synchronized(recentRelayedPackets) {
@@ -1997,6 +2279,31 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         }
 
         when (packet.msgType) {
+            PacketFraming.MSG_TYPE_DISTRESS_BEACON -> {
+                // Long-range presence advert from the UDP mesh: the same payload
+                // the BLE beacon carries, so a peer beyond BLE range still shows
+                // up on the radar instead of vanishing past ~10m.
+                val payload = DistressBeaconPayload.parseManufacturerData(packet.payload)
+                if (payload == null || payload.nodeId <= 0L) {
+                    Log.w(voicePipelineTag, "[presence] unparseable UDP advert from node=${packet.nodeId}")
+                } else {
+                    val isNew = udpBeacons.put(payload.nodeId, payload.toSyntheticBeacon()) == null
+                    if (payload.isDistress && _connectedVictimIntercom.value?.nodeId == payload.nodeId) {
+                        lastVictimContactEpochMs = System.currentTimeMillis()
+                    }
+                    if (!payload.isDistress && _connectedRescuer.value?.nodeId == payload.nodeId) {
+                        lastRescuerContactEpochMs = System.currentTimeMillis()
+                    }
+                    if (isNew) {
+                        logVoice(
+                            "presence",
+                            "long-range peer node=${payload.nodeId} via udp distress=${payload.isDistress} " +
+                                "lat=${payload.latitudeDeg} lon=${payload.longitudeDeg} batt=${payload.batteryPercent}"
+                        )
+                    }
+                    refreshMergedPeerLists()
+                }
+            }
             PacketFraming.MSG_TYPE_PROFILE -> {
                 // Identity advert from a peer: cache it and re-label every
                 // peer-derived entry so names/age/gender appear immediately.
@@ -3094,8 +3401,13 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     private fun stopMeshUdpIfIdle() {
         // The global Wi-Fi Direct flag gates the whole UDP mesh: with the
         // radio off, nothing may keep the socket alive.
+        //
+        // Rescue mode counts as "needed" on its own: it must keep listening for
+        // long-range presence adverts even before a victim is connected, or
+        // dropping an intercom would deafen the radar to every UDP-only peer.
         val needed = _wifiDirectEnabled.value && (
             _isWalkieActive.value ||
+                _isRescueActive.value ||
                 _isBroadcastingToAll.value ||
                 _connectedVictimIntercom.value != null ||
                 _isSosBroadcasting.value
@@ -3789,11 +4101,20 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
      *
      * - Bluetooth off  -> skip BLE GATT entirely (Wi-Fi Direct only).
      * - Wi-Fi Direct off -> skip UDP entirely (BLE only).
-     * - Both on, targeted: BLE-linked target -> BLE GATT only (nearby);
-     *   otherwise UDP broadcast + unicast to that node's known IP (far).
+     * - Both on, targeted: peer inside BLE range -> BLE GATT only (near, and the
+     *   only transport that can range a peer); otherwise UDP broadcast + unicast
+     *   to that node's known IP (far). This is the near/far hand-off: a peer that
+     *   walks out of BLE range keeps working over Wi-Fi Direct, and one that
+     *   walks back in returns to GATT.
      * - Both on, broadcast to all: BLE GATT + UDP broadcast, with per-peer
-     *   UDP unicast only to peers without a live GATT link (they already got
-     *   the packet over GATT).
+     *   UDP unicast only to peers outside BLE range (they already got the packet
+     *   over GATT).
+     *
+     * A targeted send that BLE could not actually deliver (no live GATT client
+     * for that node) falls through to UDP instead of being dropped.
+     *
+     * Both radios keep scanning regardless — switching transports never stops a
+     * scan, so a far peer is rediscovered the moment it comes close.
      */
     fun broadcastMeshPacket(packetBytes: ByteArray, targetNodeId: Long? = null) {
         val useBle = _bluetoothEnabled.value
@@ -3804,8 +4125,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 "radios=ble:$useBle/udp:$useUdp knownPeerIps=${peerAddressBook.knownPeers().size}"
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val linked = bleMeshManager?.connectedNodeIds?.value.orEmpty()
-            val targetIsBleLinked = targetNodeId != null && targetNodeId in linked
+            val targetIsBleLinked = targetNodeId != null && peerInBleRange(targetNodeId)
 
             // 1. Off-grid BLE direct transmission: skipped when Bluetooth is
             //    off, or when both radios are on and the target is a far node
@@ -3817,19 +4137,24 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                     bleMeshManager?.broadcastPacket(packetBytes, targetNodeId) ?: 0
                 }.getOrDefault(0)
             }
+            // BLE was chosen for a targeted send but no GATT client actually took
+            // it (link never established, or reaped between the range check and
+            // the write). Fall through to UDP rather than dropping the packet.
+            val bleMissedTarget = sendBle && targetNodeId != null && bleTargets == 0
 
             // 2. UDP unicast to peers with a known direct IP (reaches across
             //    subnets where UDP broadcast is dropped). When broadcasting to
-            //    all, BLE-linked peers are skipped — they already received the
-            //    packet over GATT.
+            //    all, peers inside BLE range are skipped — they already received
+            //    the packet over GATT.
             var udpUnicast = 0
             var udpBroadcast = false
-            val sendUdp = useUdp && (targetNodeId == null || !useBle || !targetIsBleLinked)
+            val sendUdp = useUdp &&
+                (targetNodeId == null || !useBle || !targetIsBleLinked || bleMissedTarget)
             if (sendUdp) {
                 for ((peerNodeId, host) in peerAddressBook.knownPeers()) {
                     if (peerNodeId == _nodeId.value) continue
                     if (targetNodeId != null && peerNodeId != targetNodeId) continue
-                    if (targetNodeId == null && peerNodeId in linked) continue
+                    if (targetNodeId == null && peerInBleRange(peerNodeId)) continue
                     if (wifiDirectMeshManager?.sendDatagram(packetBytes, host, WifiDirectMeshManager.UDP_PORT) == true) {
                         udpUnicast++
                     }
@@ -3844,7 +4169,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             logVoice(
                 "ble",
                 "mesh packet -> gattTargets=$bleTargets | [udp] broadcast=$udpBroadcast unicastPeers=$udpUnicast " +
-                    "(ble=$useBle udp=$useUdp targetBleLinked=$targetIsBleLinked)"
+                    "(ble=$useBle udp=$useUdp targetInBleRange=$targetIsBleLinked bleMissedTarget=$bleMissedTarget)"
             )
         }
     }
@@ -3898,11 +4223,17 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             }
         }
         // Link liveness decays on its own: a peer that stops talking must not
-        // leave the HUD showing "link active" forever.
+        // leave the HUD showing "link active" forever. The same tick retires
+        // long-range presence adverts, so a UDP-only peer that goes silent
+        // disappears from the radar even when no BLE beacon is arriving to
+        // trigger a refresh.
         viewModelScope.launch {
             while (isActive) {
                 delay(LINK_LIVENESS_TICK_MS)
                 if (_isWalkieActive.value) updateWalkieLinkState()
+                if (_isRescueActive.value || _isSosBroadcasting.value) {
+                    if (pruneStaleMeshMemory()) refreshMergedPeerLists()
+                }
             }
         }
     }
@@ -3920,6 +4251,67 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
          * peer list refresh lands well within a user's patience window.
          */
         const val WIFI_DIRECT_SCAN_INTERVAL_MS = 20_000L
+
+        /** Discovery window for the first sweep after a mode starts. */
+        const val WIFI_DIRECT_FIRST_SCAN_MS = 8_000L
+
+        /** Hold-loop cadence while a P2P group is already formed. */
+        const val WIFI_DIRECT_GROUPED_TICK_MS = 10_000L
+
+        /** Grace period for PEERS_CHANGED to land after discovery stops. */
+        const val WIFI_DIRECT_PEER_SETTLE_MS = 2_000L
+
+        /**
+         * Empty discovery cycles after which a device stops waiting for a group
+         * to join and forms one itself. A distress device anchors the group
+         * almost immediately (~10s); every other role waits roughly three times
+         * longer (~54s) so it sees and joins the victim's group instead of
+         * creating a rival one. Two group owners cannot discover each other, so
+         * this asymmetry is what prevents a permanent standoff.
+         */
+        const val GROUP_FALLBACK_CYCLES_SOS = 1
+        const val GROUP_FALLBACK_CYCLES_PEER = 3
+
+        /**
+         * How long a peer stays "in BLE range" after its last beacon. Slightly
+         * wider than the 10s beacon-stale timeout so transport choice does not
+         * flap on one missed advert.
+         */
+        const val BLE_RANGE_WINDOW_MS = 12_000L
+
+        /**
+         * How long a GATT link with no accompanying beacon is still trusted.
+         * Matches Android's link-supervision timeout, after which the stack
+         * finally reports the connection dead.
+         */
+        const val GATT_LINK_GRACE_MS = 25_000L
+
+        /** Entries older than this are dropped from [lastBleBeaconSeenMs]. */
+        const val BLE_RANGE_MEMORY_MS = 120_000L
+
+        /**
+         * Long-range presence telemetry cadence over the UDP mesh. Fast enough
+         * that a rescuer picks up a victim within a few seconds of the group
+         * forming, slow enough that it is negligible against voice traffic.
+         */
+        const val UDP_PRESENCE_INTERVAL_MS = 3_000L
+
+        /** A UDP presence advert is forgotten after this long without a refresh. */
+        const val UDP_PRESENCE_STALE_MS = 12_000L
+
+        /**
+         * Signal sentinel for peers heard only over Wi-Fi Direct: the P2P API
+         * exposes no RSSI, and this value puts [fuseGpsAndBleDistance] in its
+         * "trust GPS" branch instead of clamping to a fictitious BLE distance.
+         */
+        const val UDP_ONLY_SIGNAL_DBM = -100
+
+        /**
+         * Distance reported for a UDP-only peer when neither side has a GPS fix.
+         * Wi-Fi Direct cannot range, so this is an explicit "unknown/far" rather
+         * than a fabricated number — it also sorts such peers last.
+         */
+        const val UDP_UNRANGED_DISTANCE_METERS = 9999
 
         /** Received audio level is held this long after the last voice frame. */
         const val REMOTE_AUDIO_HOLD_MS = 400L

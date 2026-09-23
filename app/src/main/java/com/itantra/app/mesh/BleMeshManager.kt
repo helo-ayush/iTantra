@@ -296,6 +296,17 @@ class BleMeshManager(context: Context) {
 
         /** How often the scan watchdog verifies scanning is still alive. */
         private const val SCAN_WATCHDOG_PERIOD_MS = 15_000L
+
+        /**
+         * A scan is declared silently dead when _isScanning is still true but no
+         * raw scan result of any kind has arrived for this long. Set above
+         * BEACON_STALE_MS (10s) so a normal quiet RF window is not mistaken for
+         * death, yet low enough that — with the 15s watchdog period — recovery
+         * lands in ~15-27s instead of the multi-minute blackouts observed in the
+         * field. Worst case 1 restart / 15s = 2 / 30s, safely under Android's
+         * ~5-registrations-per-30s scan throttle.
+         */
+        private const val SCAN_LIVENESS_TIMEOUT_MS = 12_000L
     }
 
     private val appContext = context.applicationContext
@@ -336,9 +347,10 @@ class BleMeshManager(context: Context) {
     private val chunkAssemblers = ConcurrentHashMap<String, BleChunkAssembler>()
     private var nextBleTransferId = 0
 
-    // --- Log-only radio diagnostics. Nothing in the radio control flow reads
-    // these; they exist so a debug dump can distinguish "flag off", "dead scan",
-    // "advertise failed" and "GATT churn" from real device logs. ---
+    // --- Radio diagnostics. The liveness fields (lastRawScanResultEpochMs,
+    // recentScanStartEpochMs) now also drive the scan watchdog's silent-death
+    // detection; the error-code fields remain log-only, letting a debug dump
+    // distinguish "flag off", "dead scan", "advertise failed" and "GATT churn". ---
     @Volatile private var lastRawScanResultEpochMs = 0L
     @Volatile private var lastItantraBeaconEpochMs = 0L
     @Volatile private var lastScanErrorCode: Int? = null
@@ -1209,6 +1221,24 @@ class BleMeshManager(context: Context) {
                 if (!scanRequested) break
                 if (!_isScanning.value) {
                     Log.w("BleMeshManager", "Scan watchdog: scanner not active, re-arming")
+                    startScanningInternal()
+                    continue
+                }
+                // Flag says we are scanning but nothing has arrived: the platform
+                // stopped delivering callbacks without ever calling onScanFailed.
+                val lastStart = synchronized(recentScanStartEpochMs) {
+                    recentScanStartEpochMs.lastOrNull()
+                } ?: 0L
+                val aliveSince = maxOf(lastRawScanResultEpochMs, lastStart)
+                if (aliveSince == 0L) continue
+                val silentFor = System.currentTimeMillis() - aliveSince
+                if (silentFor > SCAN_LIVENESS_TIMEOUT_MS) {
+                    Log.w(
+                        "BleMeshManager",
+                        "Scan watchdog: no results for ${silentFor}ms despite isScanning=true, forcing stop+restart"
+                    )
+                    runCatching { bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback) }
+                    _isScanning.value = false
                     startScanningInternal()
                 }
             }

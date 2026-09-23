@@ -273,6 +273,16 @@ class BleMeshManager(context: Context) {
          */
         const val MAX_GATT_WRITE_BYTES = 512
 
+        /**
+         * After a proactive GATT attempt to an address fails or drops, that
+         * address is ignored by the scan-driven connect path for this long.
+         * Stops the ~350ms reconnect storm where every 1Hz beacon re-initiates
+         * a connection to a peer that just refused or dropped us. The lazy
+         * connect in sendPacketToDevice is deliberately NOT gated by this, so
+         * real outbound traffic (voice/profile/link) is never delayed.
+         */
+        private const val GATT_CONNECT_COOLDOWN_MS = 8_000L
+
         private const val BEACON_STALE_MS = 10_000L
         private const val PRUNE_PERIOD_MS = 1_000L
 
@@ -505,6 +515,9 @@ class BleMeshManager(context: Context) {
     private val preparedBuffers = ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
     private val connectingDevices = ConcurrentHashMap.newKeySet<String>()
 
+    /** address -> epoch ms until which the scan-driven connect path skips it. */
+    private val connectCooldownUntil = ConcurrentHashMap<String, Long>()
+
     @Synchronized
     fun startGattServer() {
         if (gattServer != null || !hasBleConnect()) return
@@ -665,6 +678,8 @@ class BleMeshManager(context: Context) {
                             Log.i("BleMeshManager", "Disconnected from peer GATT: ${device.address}")
                             activeGattClients.remove(device.address)
                             negotiatedMtus.remove(device.address)
+                            connectCooldownUntil[device.address] =
+                                System.currentTimeMillis() + GATT_CONNECT_COOLDOWN_MS
                             runCatching { gatt.close() }
                         }
                     }
@@ -723,12 +738,37 @@ class BleMeshManager(context: Context) {
                             handleReceivedBleBytes(device.address, value)
                         }
                     }
-                })
+                }, BluetoothDevice.TRANSPORT_LE)
             } catch (e: Exception) {
                 connectingDevices.remove(device.address)
+                connectCooldownUntil[device.address] =
+                    System.currentTimeMillis() + GATT_CONNECT_COOLDOWN_MS
                 Log.w("BleMeshManager", "Error connecting to peer GATT ${device.address}", e)
             }
         }
+    }
+
+    /**
+     * Decides whether *this* device should proactively open a GATT client link
+     * to a peer it just discovered, replacing the old "connect on every beacon"
+     * behaviour that caused a bidirectional reconnect storm.
+     *
+     * Deterministic rule: of two mutually-discovering phones only the one with
+     * the LOWER node id initiates; the other simply keeps its GATT server up and
+     * accepts the link. Both ids are positive Longs generated the same way, so
+     * `<` is a stable total order and exactly one side wins. An equal id (our own
+     * beacon echoed back by some OEMs) is skipped, which also avoids self-connect.
+     *
+     * When we are not advertising ([requestedBeacon] null) we have no id to
+     * compare, so we never proactively initiate; sendPacketToDevice still opens a
+     * lazy link the moment there is real data to send.
+     */
+    private fun maybeProactiveConnect(device: BluetoothDevice, peerNodeId: Long) {
+        val localId = requestedBeacon?.nodeId ?: return
+        if (localId >= peerNodeId) return
+        val cooldownUntil = connectCooldownUntil[device.address] ?: 0L
+        if (System.currentTimeMillis() < cooldownUntil) return
+        connectPeerGatt(device)
     }
 
     /**
@@ -1098,7 +1138,7 @@ class BleMeshManager(context: Context) {
 
             discoveredDevices[payload.nodeId] = result.device
             nodeIdByAddress[result.device.address] = payload.nodeId
-            connectPeerGatt(result.device)
+            maybeProactiveConnect(result.device, payload.nodeId)
 
             Log.d(
                 "BleMeshManager",

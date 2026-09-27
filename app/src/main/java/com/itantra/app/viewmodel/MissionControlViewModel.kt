@@ -102,6 +102,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 data class MissionUiState(
     val selectedLanguage: SupportedLanguage = SupportedLanguage.HINDI,
@@ -2572,9 +2573,33 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
                     // 2. Synthesize audio via TTS ONLY if local state authorizes voice playback
                     if (shouldPlayIncomingVoiceText(packet.nodeId)) {
-                        extendEchoGuard(ttsStartWindowMs)
-                        if (textToSpeak.isNotBlank() && textToSpeak.any { !it.isWhitespace() }) {
-                            recreateAudioWithTts(textToSpeak, langToSpeak)
+                        // Throttle hallucinating peers: repeats and very short
+                        // clips inside their windows keep the transcript but
+                        // never grab the loudspeaker twice.
+                        val nowRx = System.currentTimeMillis()
+                        val lastSpoken = lastSpokenTextByNode[packet.nodeId]
+                        val isDup = lastSpoken != null &&
+                            lastSpoken.first == textToSpeak &&
+                            nowRx - lastSpoken.second <= INBOUND_DUP_WINDOW_MS
+                        val isShortSpam = textToSpeak.trim().length < INBOUND_SHORT_TEXT_CHARS &&
+                            lastSpoken != null &&
+                            nowRx - lastSpoken.second <= INBOUND_SHORT_COOLDOWN_MS
+                        if (isDup || isShortSpam) {
+                            logVoice(
+                                "rx",
+                                "TTS throttled for text from ${nodeCallsign(packet.nodeId)} " +
+                                    "(dup=$isDup shortSpam=$isShortSpam): transcript kept, speaker spared"
+                            )
+                        } else {
+                            lastSpokenTextByNode[packet.nodeId] = textToSpeak to nowRx
+                            if (lastSpokenTextByNode.size > 32) {
+                                val oldest = lastSpokenTextByNode.keys.firstOrNull()
+                                if (oldest != null) lastSpokenTextByNode.remove(oldest)
+                            }
+                            extendEchoGuard(ttsStartWindowMs)
+                            if (textToSpeak.isNotBlank() && textToSpeak.any { !it.isWhitespace() }) {
+                                recreateAudioWithTts(textToSpeak, langToSpeak)
+                            }
                         }
                     } else {
                         logVoice(
@@ -2788,6 +2813,22 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     private var voiceTurnBuffer: ByteArrayOutputStream? = null
     private var voiceFrameSequence = 0
 
+    /**
+     * Last text this device broadcast + when. Fan-hallucinated decodes are
+     * stereotyped repeats, so a byte-identical decode inside the window is
+     * dropped before it can spam the mesh twice.
+     */
+    private var lastSentText: String? = null
+    private var lastSentTextEpochMs = 0L
+
+    /**
+     * Per-sender inbound throttle: nodeId -> (last text we spoke aloud, epoch).
+     * A repeated or very short text arriving inside its window still updates
+     * the transcript (messages are never lost) but never reaches TTS, so one
+     * hallucinating peer cannot hold the loudspeaker hostage.
+     */
+    private val lastSpokenTextByNode = LinkedHashMap<Long, Pair<String, Long>>()
+
     private fun startMeshVoiceCapture() {
         val capture = audioCaptureEngine ?: return
         if (capture.isRunning) return
@@ -2843,8 +2884,20 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         capture.onEndOfTurn = {
             voiceTurnCoordinator.onSpeechEnded()
             val bufferSize = synchronized(voiceTurnBuffer ?: this) { voiceTurnBuffer?.size() ?: 0 }
+            // Voicing audit: a long but weakly-voiced turn is fan hum that
+            // hovered between release and trigger — drop it before STT.
+            val voicing = capture.snapshotTurnVoicing()
+            logVoice("turn", "ended: ${bufferSize}B voiced=${voicing.voicedFrames}/${voicing.totalFrames} ratio=${voicing.ratio}")
             val action = voiceTurnCoordinator.evaluateTurn(bufferSize)
-            if (action == VoiceTurnCoordinator.TurnAction.FLUSH_STT) {
+            if (action == VoiceTurnCoordinator.TurnAction.FLUSH_STT &&
+                voicing.totalFrames > 0 && voicing.ratio < MIN_TURN_VOICED_RATIO
+            ) {
+                synchronized(voiceTurnBuffer ?: this) {
+                    voiceTurnBuffer?.reset()
+                }
+                _uiState.update { it.copy(channelState = RadioChannelState.STANDBY).clearStatus() }
+                logVoice("stt", "dropped low-voiced turn ($bufferSize bytes, ratio=${voicing.ratio} < $MIN_TURN_VOICED_RATIO): steady-noise hum, not speech")
+            } else if (action == VoiceTurnCoordinator.TurnAction.FLUSH_STT) {
                 _uiState.update { state ->
                     val next = state.copy(channelState = RadioChannelState.STANDBY)
                     if (next.voiceStatus != null) next.withStatus(VoiceStatus.TRANSCRIBING) else next
@@ -3023,6 +3076,21 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         )
     }
 
+    /** Raw RMS of a little-endian 16-bit PCM buffer (pre-STT energy audit). */
+    private fun rmsOfPcmBytes(pcm: ByteArray): Double {
+        if (pcm.size < 2) return 0.0
+        var sumSq = 0.0
+        var n = 0
+        var i = 0
+        while (i + 1 < pcm.size) {
+            val s = ((pcm[i + 1].toInt() shl 8) or (pcm[i].toInt() and 0xFF)).toShort().toDouble()
+            sumSq += s * s
+            n++
+            i += 2
+        }
+        return if (n == 0) 0.0 else sqrt(sumSq / n)
+    }
+
     private fun Char.isSpeechContentChar(): Boolean {
         if (this.isLetterOrDigit()) return true
         val type = Character.getType(this)
@@ -3065,6 +3133,23 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             }
             return
         }
+        // Steady-noise audit (covers the 8s force-flush path, which never
+        // passes through onEndOfTurn): weakly-voiced long turns are fan hum.
+        val turnVoicing = audioCaptureEngine?.snapshotTurnVoicing()
+        val turnRms = rmsOfPcmBytes(pcmBytes)
+        val noiseFloor = audioCaptureEngine?.currentNoiseFloor ?: 0.0
+        logVoice(
+            "stt",
+            "pre-gates: ${pcmBytes.size}B rms=${turnRms.roundToInt()} floor=${noiseFloor.roundToInt()} " +
+                "voiced=${turnVoicing?.voicedFrames}/${turnVoicing?.totalFrames} ratio=${turnVoicing?.ratio}"
+        )
+        if (turnVoicing != null && turnVoicing.totalFrames > 0 && turnVoicing.ratio < MIN_TURN_VOICED_RATIO) {
+            logVoice("stt", "dropped low-voiced turn (ratio=${turnVoicing.ratio} < $MIN_TURN_VOICED_RATIO): steady-noise hum, not speech")
+            viewModelScope.launch(Dispatchers.Main) {
+                _uiState.update { it.copy(channelState = RadioChannelState.STANDBY).clearStatus() }
+            }
+            return
+        }
 
         val pcmShorts = pcmBytesToShorts(pcmBytes)
         val selectedLang = _uiState.value.selectedLanguage
@@ -3084,14 +3169,17 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 modelStorageManager.isInstalledOnDisk(langCode) ||
                 modelStorageManager.isInstalledOnDisk(langTag)
 
+            var sttBlankRatio = 1f
             if (isInstalled && onnx != null) {
                 try {
                     val loaded = onnx.loadStt(langTag) ||
                         onnx.loadStt(langCode) ||
                         onnx.loadStt("${langCode}-IN")
                     if (loaded) {
-                        transcribedText = onnx.transcribe(pcmShorts).trim()
-                        logVoice("stt", "output '$transcribedText' (lang=$langTag, pcm=${pcmBytes.size}B)")
+                        val decoded = onnx.transcribeWithStats(pcmShorts)
+                        transcribedText = decoded.text.trim()
+                        sttBlankRatio = decoded.blankRatio
+                        logVoice("stt", "output '$transcribedText' (lang=$langTag, pcm=${pcmBytes.size}B, blank=${decoded.blankRatio})")
                     } else {
                         Log.w(voicePipelineTag, "[stt] loadStt failed for $langTag / $langCode")
                     }
@@ -3114,6 +3202,17 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             val cleanText = transcribedText.trim()
             val contentCharCount = cleanText.count { it.isSpeechContentChar() }
             val contentRatio = if (cleanText.isNotEmpty()) contentCharCount.toFloat() / cleanText.length else 0f
+            // Decoder no-speech gate: steady noise decodes mostly-blank with a
+            // few spurious tokens (high blank ratio); speech is token-dense.
+            if (sttBlankRatio > STT_BLANK_RATIO_MAX) {
+                logVoice("stt", "dropped mostly-blank decode '$cleanText' (blank=$sttBlankRatio > $STT_BLANK_RATIO_MAX): decoder heard no speech")
+                withContext(Dispatchers.Main) {
+                    if (_uiState.value.voiceStatus != null) {
+                        _uiState.update { it.copy(currentTranscript = "").clearStatus() }
+                    }
+                }
+                return@launch
+            }
             if (cleanText.isBlank() || contentCharCount < 1 || contentRatio < 0.25f) {
                 Log.d("MissionControl", "flushVoiceTurn: Noise transcription ('$cleanText', content=$contentCharCount/${cleanText.length}), dropping turn")
                 withContext(Dispatchers.Main) {
@@ -3125,6 +3224,13 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                             _uiState.update { it.copy(currentTranscript = "").clearStatus() }
                     }
                 }
+                return@launch
+            }
+            // Repeat suppression: fan hallucinations are stereotyped — an
+            // identical decode inside the window never reaches the mesh twice.
+            val nowMs = System.currentTimeMillis()
+            if (cleanText == lastSentText && nowMs - lastSentTextEpochMs <= SEND_REPEAT_WINDOW_MS) {
+                logVoice("stt", "dropped repeat decode '$cleanText' (identical to last sent ${nowMs - lastSentTextEpochMs}ms ago)")
                 return@launch
             }
 
@@ -3191,6 +3297,8 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             )
             val encodedText = PacketFraming.encode(textPacket)
             logVoice("send", "text packet ${encodedText.size}B target=${textTarget?.let { nodeCallsign(it) } ?: "all"} (${textToSend.length} chars, lang=$targetLangCode)")
+            lastSentText = cleanText
+            lastSentTextEpochMs = System.currentTimeMillis()
             broadcastMeshPacket(encodedText, textTarget)
         }
     }
@@ -4495,5 +4603,33 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
          * deliberately broken intercom link cannot silently re-establish.
          */
         const val EXPLICIT_DISCONNECT_GRACE_MS = 15_000L
+
+        /**
+         * Minimum fraction of a turn's frames that must clear the VAD trigger
+         * for the turn to reach STT. A fan holds the mic open with frames
+         * hovering between release and trigger (low ratio); near-mic speech
+         * punches clearly above trigger most of the turn (high ratio).
+         * Tuned from the on-device fan baseline; see the [stt] turn logs.
+         */
+        const val MIN_TURN_VOICED_RATIO = 0.35f
+
+        /**
+         * Maximum CTC blank-frame fraction a decode may carry and still be
+         * spoken/sent. Steady noise decodes mostly-blank with a few spurious
+         * tokens; real speech emits dense token runs.
+         */
+        const val STT_BLANK_RATIO_MAX = 0.90f
+
+        /** Byte-identical outbound decodes inside this window are dropped as repeats. */
+        const val SEND_REPEAT_WINDOW_MS = 15_000L
+
+        /** Byte-identical inbound texts inside this window update the transcript but skip TTS. */
+        const val INBOUND_DUP_WINDOW_MS = 8_000L
+
+        /** Texts shorter than this are TTS-throttled per sender... */
+        const val INBOUND_SHORT_TEXT_CHARS = 4
+
+        /** ...to at most one spoken clip per sender per window. */
+        const val INBOUND_SHORT_COOLDOWN_MS = 5_000L
     }
 }

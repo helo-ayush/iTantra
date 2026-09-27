@@ -2550,6 +2550,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
                     // 2. Synthesize audio via TTS ONLY if local state authorizes voice playback
                     if (shouldPlayIncomingVoiceText(packet.nodeId)) {
+                        extendEchoGuard(ttsStartWindowMs)
                         if (textToSpeak.isNotBlank() && textToSpeak.any { !it.isWhitespace() }) {
                             recreateAudioWithTts(textToSpeak, langToSpeak)
                         }

@@ -341,7 +341,22 @@ class DenoiserEngine(context: Context) {
     private val appContext = context.applicationContext
 
     fun modelFile(): File = File(File(appContext.filesDir, MODEL_DIR_NAME), MODEL_FILE_NAME)
-    fun isModelPresent(): Boolean = runCatching { modelFile().length() > 1_000_000L }.getOrDefault(false)
+    fun isModelPresent(): Boolean = runCatching {
+        val f = modelFile()
+        if (f.length() > 1_000_000L) return@runCatching true
+        // Test builds may bundle the weights as an untracked asset so the
+        // A/B runs without adb. Promote to filesDir once (never in git).
+        try {
+            appContext.assets.open("$MODEL_DIR_NAME/$MODEL_FILE_NAME").use { input ->
+                f.parentFile?.mkdirs()
+                f.outputStream().use { output -> input.copyTo(output) }
+            }
+            Log.i(TAG, "DF2 weights promoted from assets (${f.length()} bytes)")
+            f.length() > 1_000_000L
+        } catch (_: Throwable) {
+            false
+        }
+    }.getOrDefault(false)
 
     private var ortEnv: OrtEnvironment? = null
     private var session: OrtSession? = null

@@ -4606,19 +4606,22 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
         /**
          * Minimum fraction of a turn's frames that must clear the VAD trigger
-         * for the turn to reach STT. A fan holds the mic open with frames
-         * hovering between release and trigger (low ratio); near-mic speech
-         * punches clearly above trigger most of the turn (high ratio).
-         * Tuned from the on-device fan baseline; see the [stt] turn logs.
+         * for the turn to reach STT. Deliberately recall-biased: on-device
+         * data showed speech+fan bottoming at 0.351 vs fan topping at 0.347,
+         * and a dropped sentence is worse than a transmitted mumble — the
+         * blank gate, repeat suppression and receiver TTS throttle still
+         * stand behind this one.
          */
-        const val MIN_TURN_VOICED_RATIO = 0.35f
+        const val MIN_TURN_VOICED_RATIO = 0.25f
 
         /**
          * Maximum CTC blank-frame fraction a decode may carry and still be
-         * spoken/sent. Steady noise decodes mostly-blank with a few spurious
-         * tokens; real speech emits dense token runs.
+         * spoken/sent. Deliberately recall-biased: speech+fan measured up to
+         * 0.90 blank vs fan hallucinations from 0.9067, so the line sits
+         * above every observed speech sample. Occasional noise artifacts may
+         * pass; repeat suppression + receiver throttle bound their damage.
          */
-        const val STT_BLANK_RATIO_MAX = 0.90f
+        const val STT_BLANK_RATIO_MAX = 0.95f
 
         /** Byte-identical outbound decodes inside this window are dropped as repeats. */
         const val SEND_REPEAT_WINDOW_MS = 15_000L

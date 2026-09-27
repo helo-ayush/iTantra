@@ -320,8 +320,14 @@ class DenoiserEngine(context: Context) {
         const val MODEL_FILE_NAME = "dfn2_ll_combined.onnx"
         const val MODEL_DIR_NAME = "denoiser"
 
-        /** Attenuation cap (dB): the output always keeps this much of the input. */
-        const val ATTEN_LIM_DB = 12f
+        /**
+         * Attenuation cap (dB): the output always keeps this much of the
+         * input mixed back in. Lowered 12 -> 6 after field testing showed
+         * slightly over-suppressed speech: at 6 dB the result is half
+         * enhanced / half original, so voice character survives while the
+         * fan floor still drops audibly.
+         */
+        const val ATTEN_LIM_DB = 6f
         val ATTEN_LIM_LIN = Math.pow(10.0, (-ATTEN_LIM_DB / 20.0).toDouble()).toFloat()
 
         // Local-SNR staging (dB), straight from the DF reference.

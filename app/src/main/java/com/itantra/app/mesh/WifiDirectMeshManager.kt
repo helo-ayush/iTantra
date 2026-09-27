@@ -256,6 +256,10 @@ class WifiDirectMeshManager(context: Context) {
             _groupNetworkName.value = null
             _groupPassphrase.value = null
             _connectedClients.value = emptyList()
+            // The next group forms on a fresh subnet: cached unicast targets
+            // from the dead group would silently miss, so drop them and let
+            // broadcast + fresh inbound packets relearn addresses.
+            peerIpCache.clear()
         }
     }
 

@@ -874,19 +874,22 @@ class BleMeshManager(context: Context) {
     }
 
     /**
-     * Sends [bytes] to every reachable iTantra peer over BLE GATT.
+     * Broadcasts [bytes] to the BLE mesh:
+     *  1. notifies any client currently connected to our local GATT server;
+     *  2. writes to connected GATT clients (and connects on demand if [connectIfNeeded] is true).
      *
-     * @param targetNodeId when non-null, restricts direct writes to that node.
+     * @param targetNodeId when null, all connected and discovered peers are targeted;
+     *   when non-null, only the device matching that node ID is targeted.
      * @param connectIfNeeded when false, only peers that already hold a live
-     *   GATT link are written to. Real-time 20 ms voice frames use this so a
-     *   missing link degrades to "UDP only" instead of re-running GATT
-     *   discovery 50 times per second.
+     *   GATT link are written to. Defaults to false so passive radar discovery and
+     *   general broadcasts (profiles, telemetry) never initiate connection storms.
+     *   Only explicit, targeted point-to-point sends should set this to true.
      * @return number of GATT targets the packet was handed to (notify + write).
      */
     fun broadcastPacket(
         bytes: ByteArray,
         targetNodeId: Long? = null,
-        connectIfNeeded: Boolean = true
+        connectIfNeeded: Boolean = false
     ): Int {
         if (!hasBleConnect()) return 0
         var targets = 0

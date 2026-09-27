@@ -4134,7 +4134,11 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             val sendBle = useBle && (targetNodeId == null || !useUdp || targetIsBleLinked)
             if (sendBle) {
                 bleTargets = runCatching {
-                    bleMeshManager?.broadcastPacket(packetBytes, targetNodeId) ?: 0
+                    bleMeshManager?.broadcastPacket(
+                        packetBytes,
+                        targetNodeId,
+                        connectIfNeeded = (targetNodeId != null)
+                    ) ?: 0
                 }.getOrDefault(0)
             }
             // BLE was chosen for a targeted send but no GATT client actually took
@@ -4143,9 +4147,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             val bleMissedTarget = sendBle && targetNodeId != null && bleTargets == 0
 
             // 2. UDP unicast to peers with a known direct IP (reaches across
-            //    subnets where UDP broadcast is dropped). When broadcasting to
-            //    all, peers inside BLE range are skipped — they already received
-            //    the packet over GATT.
+            //    subnets where UDP broadcast is dropped).
             var udpUnicast = 0
             var udpBroadcast = false
             val sendUdp = useUdp &&
@@ -4154,7 +4156,6 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 for ((peerNodeId, host) in peerAddressBook.knownPeers()) {
                     if (peerNodeId == _nodeId.value) continue
                     if (targetNodeId != null && peerNodeId != targetNodeId) continue
-                    if (targetNodeId == null && peerInBleRange(peerNodeId)) continue
                     if (wifiDirectMeshManager?.sendDatagram(packetBytes, host, WifiDirectMeshManager.UDP_PORT) == true) {
                         udpUnicast++
                     }

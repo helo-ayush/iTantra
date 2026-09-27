@@ -25,6 +25,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.itantra.app.ai.DenoiserEngine
 import com.itantra.app.ai.OnnxInferenceManager
 import com.itantra.app.ai.TranslationEngine
 import com.itantra.app.audio.AudioCaptureEngine
@@ -165,6 +166,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     private val onnxInferenceManager: OnnxInferenceManager? =
         runCatching { OnnxInferenceManager(getApplication()) }.getOrNull()
+
+    /**
+     * DeepFilterNet2 pre-STT suppressor. Lazy-nullable like every other
+     * hardware engine: without side-loaded weights every call is a no-op and
+     * the voice path is byte-identical to today.
+     */
+    private val denoiserEngine: DenoiserEngine? =
+        runCatching { DenoiserEngine(getApplication()) }.getOrNull()
 
     // =========================================================================
     // VOICE MESH PIPELINE (pure policy + field-testing instrumentation)
@@ -3197,6 +3206,28 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 return@launch
             }
 
+            // Neural-denoise A/B (compare mode, zero convo risk): when DF2
+            // weights are side-loaded, decode a denoised copy and log both
+            // blanks side by side. The mesh ALWAYS carries the raw decode in
+            // this mode — the numbers decide whether denoised-send ships.
+            val denoiser = denoiserEngine
+            if (denoiser != null && denoiser.isModelPresent() && transcribedText.isNotBlank()) {
+                runCatching {
+                    val tD0 = System.currentTimeMillis()
+                    val denoised = denoiser.denoise(pcmShorts)
+                    val dRes = denoised?.let { onnx?.transcribeWithStats(it) }
+                    if (dRes != null) {
+                        logVoice(
+                            "denoise",
+                            "A/B raw blank=$sttBlankRatio vs denoised blank=${dRes.blankRatio} " +
+                                "(+${System.currentTimeMillis() - tD0}ms) denoised='${dRes.text}'"
+                        )
+                    } else {
+                        logVoice("denoise", "A/B skipped: denoiser returned null (see ItantraDenoise tag)")
+                    }
+                }
+            }
+
             // Post-STT noise gate: support both Latin & Indic scripts (including vowel signs / matras)
             // Require at least 1 valid speech character making up >= 25% of string length
             val cleanText = transcribedText.trim()
@@ -3719,6 +3750,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         bleMeshManager?.shutdown()
         wifiDirectMeshManager?.shutdown()
         runCatching { onnxInferenceManager?.close() }
+        runCatching { denoiserEngine?.close() }
         runCatching {
             systemTts?.stop()
             systemTts?.shutdown()

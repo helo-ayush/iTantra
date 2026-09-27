@@ -412,6 +412,15 @@ class BleMeshManager(context: Context) {
     private val chunkAssemblers = ConcurrentHashMap<String, BleChunkAssembler>()
     private var nextBleTransferId = 0
 
+    // --- Log-only radio diagnostics. Nothing in the radio control flow reads
+    // these; they exist so a debug dump can distinguish "flag off", "dead scan",
+    // "advertise failed" and "GATT churn" from real device logs. ---
+    @Volatile private var lastRawScanResultEpochMs = 0L
+    @Volatile private var lastItantraBeaconEpochMs = 0L
+    @Volatile private var lastScanErrorCode: Int? = null
+    @Volatile private var lastAdvertiseErrorCode: Int? = null
+    private val recentScanStartEpochMs = ArrayDeque<Long>()
+
     private class BleChunkAssembler(val totalChunks: Int) {
         val createdEpochMs = System.currentTimeMillis()
         val chunks = arrayOfNulls<ByteArray>(totalChunks)
@@ -940,6 +949,7 @@ class BleMeshManager(context: Context) {
         override fun onStartFailure(errorCode: Int) {
             _isAdvertising.value = false
             onAirBeacon = null
+            lastAdvertiseErrorCode = errorCode
             if (errorCode == AdvertiseCallback.ADVERTISE_FAILED_ALREADY_STARTED) {
                 // A stale advertisement (old role/coordinates) is still on the
                 // air. Tear it down and retry with the payload we actually want
@@ -1153,6 +1163,7 @@ class BleMeshManager(context: Context) {
 
         override fun onScanFailed(errorCode: Int) {
             _isScanning.value = false
+            lastScanErrorCode = errorCode
             Log.e("BleMeshManager", "BLE scan failed, errorCode: $errorCode")
             scheduleScanRetry()
         }
@@ -1173,10 +1184,12 @@ class BleMeshManager(context: Context) {
 
     private fun handleScanResult(result: ScanResult) {
         try {
+            lastRawScanResultEpochMs = System.currentTimeMillis()
             val record = result.scanRecord ?: return
             val payloadBytes = record.getManufacturerSpecificData(DistressBeaconPayload.MANUFACTURER_ID)
                 ?: return
             val payload = DistressBeaconPayload.parseManufacturerData(payloadBytes) ?: return
+            lastItantraBeaconEpochMs = System.currentTimeMillis()
 
             discoveredDevices[payload.nodeId] = result.device
             nodeIdByAddress[result.device.address] = payload.nodeId
@@ -1254,6 +1267,10 @@ class BleMeshManager(context: Context) {
             val anyFilter = ScanFilter.Builder().build()
             startGattServer()
             registerAdapterStateReceiver()
+            synchronized(recentScanStartEpochMs) {
+                recentScanStartEpochMs.addLast(System.currentTimeMillis())
+                while (recentScanStartEpochMs.size > 10) recentScanStartEpochMs.removeFirst()
+            }
             scanner.startScan(listOf(anyFilter), settings, scanCallback)
             scanLiveness = ScanSessionLiveness(sessionStartedEpochMs = System.currentTimeMillis())
             _isScanning.value = true
@@ -1443,6 +1460,27 @@ class BleMeshManager(context: Context) {
                 }
             }
         }
+    }
+
+    /**
+     * Log-only one-line snapshot of the BLE radio for a debug dump. Nothing in
+     * the control flow consumes this; it exists to tell "flag off", "dead scan"
+     * and "advertise failed" apart from device logs. Ages are milliseconds since
+     * the event, or -1 when it has never happened.
+     */
+    fun radioDiagnostics(): String {
+        val now = System.currentTimeMillis()
+        fun age(epochMs: Long) = if (epochMs == 0L) -1L else now - epochMs
+        val scanStarts30s = synchronized(recentScanStartEpochMs) {
+            recentScanStartEpochMs.count { now - it <= 30_000L }
+        }
+        return "ble[advReq=$advertiseRequested adv=${_isAdvertising.value} " +
+            "scanReq=$scanRequested scan=${_isScanning.value} " +
+            "lastRawScanMs=${age(lastRawScanResultEpochMs)} lastBeaconMs=${age(lastItantraBeaconEpochMs)} " +
+            "lastScanErr=$lastScanErrorCode lastAdvErr=$lastAdvertiseErrorCode " +
+            "scanStarts30s=$scanStarts30s " +
+            "gattClients=${activeGattClients.size} gattServerClients=${connectedGattClients.size} " +
+            "connecting=${connectingDevices.size} discovered=${discoveredDevices.size}]"
     }
 
     /** Stops advertising, scanning, GATT server and background pruning. */

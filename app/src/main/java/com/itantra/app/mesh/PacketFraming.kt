@@ -58,6 +58,13 @@ object PacketFraming {
     const val CRC_BYTES = 4
     const val MAX_PAYLOAD_BYTES = 0xFFFF
 
+    /**
+     * Long-range presence advert: payload is the same 24-byte
+     * [DistressBeaconPayload.toManufacturerDataWithId] body the BLE beacon
+     * carries, repeated over the UDP mesh so peers beyond BLE range are still
+     * discovered. Carries no RSSI, so it is never relayed (ttl 1) and never
+     * deduplicated — it is self-refreshing state, not a message.
+     */
     const val MSG_TYPE_DISTRESS_BEACON = 0x01
     const val MSG_TYPE_VOICE_FRAME = 0x02
     const val MSG_TYPE_TRANSLATED_TEXT = 0x03

@@ -286,22 +286,38 @@ class OnnxInferenceManager(context: Context) {
     // =========================================================================
 
     /**
+     * A transcription plus the decoder's own no-speech signal: the fraction
+     * of CTC frames whose argmax was the blank symbol. Steady background
+     * noise (fan, engine hum) decodes mostly-blank with a few spurious
+     * tokens (high ratio); real speech emits dense token runs (low ratio).
+     * This is the on-device equivalent of Whisper's `no_speech_prob`.
+     */
+    data class TranscriptionResult(val text: String, val blankRatio: Float)
+
+    /**
      * Transcribes 16 kHz mono PCM into text.
      *
      * @return the transcription, or an empty string on any failure.
      */
-    fun transcribe(pcm16k: ShortArray): String {
+    fun transcribe(pcm16k: ShortArray): String = transcribeWithStats(pcm16k).text
+
+    /**
+     * Transcribes 16 kHz mono PCM into text plus decoder stats.
+     *
+     * @return [TranscriptionResult] (empty text + 1.0 blank ratio on failure).
+     */
+    fun transcribeWithStats(pcm16k: ShortArray): TranscriptionResult {
         val session = sttSession ?: run {
             Log.w("OnnxInferenceManager", "transcribe: sttSession is null")
-            return ""
+            return TranscriptionResult("", 1f)
         }
         val env = ortEnv ?: run {
             Log.w("OnnxInferenceManager", "transcribe: ortEnv is null")
-            return ""
+            return TranscriptionResult("", 1f)
         }
         if (pcm16k.size < 160) {
             Log.w("OnnxInferenceManager", "transcribe: audio too short (${pcm16k.size} samples)")
-            return ""
+            return TranscriptionResult("", 1f)
         }
         val inputTensors = mutableMapOf<String, OnnxTensor>()
         return try {
@@ -313,7 +329,7 @@ class OnnxInferenceManager(context: Context) {
             )
             if (mels.isEmpty()) {
                 Log.w("OnnxInferenceManager", "transcribe: LogMel returned empty")
-                return ""
+                return TranscriptionResult("", 1f)
             }
 
             val normalized = normalizeFeatures(mels)
@@ -368,7 +384,7 @@ class OnnxInferenceManager(context: Context) {
             }
 
             // 3) Run inference and CTC-greedy decode the logits.
-            var resultText = ""
+            var decoded = TranscriptionResult("", 1f)
             session.run(inputTensors).use { result ->
                 var logitsTensor: OnnxTensor? = null
                 for (entry in result) {
@@ -400,14 +416,14 @@ class OnnxInferenceManager(context: Context) {
                         timeSteps = logitsTensor.floatBuffer.remaining() / numClasses
                     }
                     val logitBuffer = logitsTensor.floatBuffer
-                    resultText = greedyCtcDecode(logitBuffer, timeSteps, numClasses, timeFirst)
+                    decoded = greedyCtcDecode(logitBuffer, timeSteps, numClasses, timeFirst)
                 }
             }
-            Log.d("OnnxInferenceManager", "transcribe success: '$resultText'")
-            resultText
+            Log.d("OnnxInferenceManager", "transcribe success: '${decoded.text}' blankRatio=${decoded.blankRatio}")
+            decoded
         } catch (t: Throwable) {
             Log.e("OnnxInferenceManager", "transcribe exception", t)
-            ""
+            TranscriptionResult("", 1f)
         } finally {
             for (tensor in inputTensors.values) {
                 runCatching { tensor.close() }
@@ -417,18 +433,20 @@ class OnnxInferenceManager(context: Context) {
 
     /**
      * CTC greedy decode: argmax per frame, collapse repeats, drop the blank,
-     * and reassemble SentencePiece subwords into natural text.
+     * and reassemble SentencePiece subwords into natural text. Also counts
+     * blank frames so callers get a no-speech signal alongside the text.
      */
     private fun greedyCtcDecode(
         logits: FloatBuffer,
         timeSteps: Int,
         numClasses: Int,
         timeFirst: Boolean = true
-    ): String {
+    ): TranscriptionResult {
         // In NeMo CTC exports, blank is numClasses - 1 (when numClasses == vocab.size + 1).
         val blankId = if (numClasses >= sttVocab.size) numClasses - 1 else 0
         val sb = StringBuilder()
         var previous = -1
+        var blankFrames = 0
 
         for (t in 0 until timeSteps) {
             var best = -1
@@ -444,6 +462,7 @@ class OnnxInferenceManager(context: Context) {
                     best = c
                 }
             }
+            if (best == blankId) blankFrames++
             // CTC collapse: skip blanks and consecutive duplicate symbols
             if (best != blankId && best != previous) {
                 if (best in sttVocab.indices) {
@@ -458,11 +477,13 @@ class OnnxInferenceManager(context: Context) {
 
         // SentencePiece space decoding:
         // Replace U+2581 (lower one eighth block) and '▁' with standard space.
-        return sb.toString()
+        val text = sb.toString()
             .replace("\u2581", " ")
             .replace("▁", " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+        val blankRatio = if (timeSteps > 0) blankFrames.toFloat() / timeSteps else 1f
+        return TranscriptionResult(text, blankRatio)
     }
 
     // =========================================================================

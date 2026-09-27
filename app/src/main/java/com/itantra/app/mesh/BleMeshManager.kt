@@ -337,6 +337,29 @@ class BleMeshManager(context: Context) {
          * Locked down by `BleDiscoveryLivenessTest`.
          */
         internal const val BEACON_STALE_MS = 45_000L
+
+        /**
+         * Upper bound on a single GATT connect attempt. Android's own timeout for
+         * an unreachable peripheral is ~30s (5s on some Samsung devices), and a
+         * connect left pending that long stops the scanner delivering results —
+         * long enough for the peer to exceed [BEACON_STALE_MS] and be pruned off
+         * the rescue radar. Kept far below that threshold so even a failed
+         * attempt cannot blank the radar. Reference libraries bound it the same
+         * way (Nordic classifies a timeout at 20s, BLESSED adds a 35s safety
+         * timer, bitchat expires an attempt after 10s).
+         */
+        private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
+
+        /**
+         * Exponential backoff applied after a failed connect, keyed on the peer's
+         * stable NODE ID rather than its BLE address: an advertising peer rotates
+         * its resolvable private address (measured 12 distinct addresses for one
+         * node in 6 minutes), so per-address backoff never blocks the next
+         * attempt. Mirrors bitchat's peerID dedupe and Meshtastic's 5s->60s
+         * reconnect backoff.
+         */
+        private const val GATT_BACKOFF_BASE_MS = 8_000L
+        private const val GATT_BACKOFF_MAX_MS = 60_000L
         private const val PRUNE_PERIOD_MS = 1_000L
 
         /**
@@ -412,9 +435,10 @@ class BleMeshManager(context: Context) {
     private val chunkAssemblers = ConcurrentHashMap<String, BleChunkAssembler>()
     private var nextBleTransferId = 0
 
-    // --- Log-only radio diagnostics. Nothing in the radio control flow reads
-    // these; they exist so a debug dump can distinguish "flag off", "dead scan",
-    // "advertise failed" and "GATT churn" from real device logs. ---
+    // --- Radio diagnostics. Silent-death detection lives in
+    // shouldRestartStalledScan/restartScanInternal; these timestamp fields are
+    // log-only, letting a debug dump distinguish "flag off", "dead scan",
+    // "advertise failed" and "GATT churn". ---
     @Volatile private var lastRawScanResultEpochMs = 0L
     @Volatile private var lastItantraBeaconEpochMs = 0L
     @Volatile private var lastScanErrorCode: Int? = null
@@ -569,6 +593,12 @@ class BleMeshManager(context: Context) {
     private val preparedBuffers = ConcurrentHashMap<String, java.io.ByteArrayOutputStream>()
     private val connectingDevices = ConcurrentHashMap.newKeySet<String>()
 
+    /** backoff key (node id, else address) -> epoch ms until which connects are skipped. */
+    private val connectBackoffUntil = ConcurrentHashMap<String, Long>()
+
+    /** backoff key -> consecutive failed connect attempts, reset on success. */
+    private val connectFailures = ConcurrentHashMap<String, Int>()
+
     @Synchronized
     fun startGattServer() {
         if (gattServer != null || !hasBleConnect()) return
@@ -695,6 +725,8 @@ class BleMeshManager(context: Context) {
         }
         activeGattClients.clear()
         connectingDevices.clear()
+        connectBackoffUntil.clear()
+        connectFailures.clear()
         negotiatedMtus.clear()
         chunkAssemblers.clear()
     }
@@ -705,32 +737,90 @@ class BleMeshManager(context: Context) {
         }
     }
 
-    /** Proactively connects to a discovered peer GATT server so link is established and ready. */
+    /**
+     * Opens a GATT client link to [device] so mesh packets can be written to it.
+     *
+     * Only send-driven callers reach this (see [broadcastPacket]). Discovering a
+     * beacon no longer triggers a connect: radar presence and telemetry are
+     * carried entirely by the advertisement, so connecting on discovery bought
+     * nothing and cost scan availability.
+     *
+     * Two guards keep a doomed attempt from taking the radar down with it — a
+     * bounded [GATT_CONNECT_TIMEOUT_MS] window, and node-keyed exponential
+     * backoff (see the constants for why the address cannot be the key).
+     */
     fun connectPeerGatt(device: BluetoothDevice) {
         if (!hasBleConnect()) return
-        if (activeGattClients.containsKey(device.address) || connectingDevices.contains(device.address)) {
+        val address = device.address
+        if (activeGattClients.containsKey(address) || connectingDevices.contains(address)) return
+        val backoffKey = connectBackoffKey(nodeIdByAddress[address], address)
+        if (isConnectBackedOff(backoffKey)) {
+            Log.d("BleMeshManager", "Skipping GATT connect to $backoffKey; backing off after earlier failures")
             return
         }
-        connectingDevices.add(device.address)
+        connectingDevices.add(address)
         scope.launch(Dispatchers.IO) {
+            val settled = java.util.concurrent.atomic.AtomicBoolean(false)
+            val clientGattRef = java.util.concurrent.atomic.AtomicReference<BluetoothGatt?>(null)
+            val timeoutJob = launch {
+                delay(GATT_CONNECT_TIMEOUT_MS)
+                if (!settled.compareAndSet(false, true)) return@launch
+                Log.w(
+                    "BleMeshManager",
+                    "GATT connect to $backoffKey timed out after ${GATT_CONNECT_TIMEOUT_MS}ms; abandoning"
+                )
+                connectingDevices.remove(address)
+                registerConnectFailure(backoffKey)
+                clientGattRef.getAndSet(null)?.let { stale ->
+                    runCatching { stale.disconnect() }
+                    runCatching { stale.close() }
+                }
+                reviveScanAfterConnect()
+            }
             try {
-                Log.i("BleMeshManager", "Initiating proactive GATT connection to ${device.address}")
-                device.connectGatt(appContext, false, object : BluetoothGattCallback() {
+                Log.i("BleMeshManager", "Initiating GATT connection to $backoffKey ($address)")
+                val clientGatt = device.connectGatt(appContext, false, object : BluetoothGattCallback() {
                     override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                        connectingDevices.remove(device.address)
                         if (newState == BluetoothProfile.STATE_CONNECTED) {
-                            Log.i("BleMeshManager", "Connected to peer GATT: ${device.address}")
-                            activeGattClients[device.address] = gatt
-                            val requested = gatt.requestMtu(512)
-                            if (!requested) {
+                            // A success landing after we abandoned the attempt is documented
+                            // behaviour (close() does not always drop a pending connect), so
+                            // tear it down rather than register a link nobody is awaiting.
+                            if (!settled.compareAndSet(false, true)) {
+                                runCatching { gatt.close() }
+                                return
+                            }
+                            timeoutJob.cancel()
+                            connectingDevices.remove(address)
+                            clearConnectBackoff(backoffKey)
+                            Log.i("BleMeshManager", "Connected to peer GATT: $address")
+                            activeGattClients[address] = gatt
+                            if (!gatt.requestMtu(512)) {
                                 gatt.discoverServices()
                             }
-                        } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                            Log.i("BleMeshManager", "Disconnected from peer GATT: ${device.address}")
-                            activeGattClients.remove(device.address)
-                            negotiatedMtus.remove(device.address)
-                            runCatching { gatt.close() }
+                            return
                         }
+                        if (newState != BluetoothProfile.STATE_DISCONNECTED) return
+
+                        // Resolving the attempt here means it failed before ever
+                        // connecting, so it earns a backoff. A link that was up and
+                        // then dropped does not: the next send should reconnect at once.
+                        val resolvedNow = settled.compareAndSet(false, true)
+                        if (resolvedNow) {
+                            timeoutJob.cancel()
+                            registerConnectFailure(backoffKey)
+                        }
+                        val hadLink = activeGattClients.remove(address) != null
+                        connectingDevices.remove(address)
+                        negotiatedMtus.remove(address)
+                        Log.i(
+                            "BleMeshManager",
+                            "Disconnected from peer GATT: $address (status=$status, hadLink=$hadLink)"
+                        )
+                        runCatching { gatt.close() }
+                        // When the timeout path already fired it bounced the scan too,
+                        // so only bounce again if this is the first resolution or a
+                        // link that was genuinely up has just dropped.
+                        if (resolvedNow || hadLink) reviveScanAfterConnect()
                     }
 
                     override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
@@ -787,28 +877,84 @@ class BleMeshManager(context: Context) {
                             handleReceivedBleBytes(device.address, value)
                         }
                     }
-                })
+                }, BluetoothDevice.TRANSPORT_LE)
+                clientGattRef.set(clientGatt)
+                // The attempt may have timed out while connectGatt was still in flight.
+                if (settled.get() && clientGatt != null) {
+                    runCatching { clientGatt.disconnect() }
+                    runCatching { clientGatt.close() }
+                }
             } catch (e: Exception) {
-                connectingDevices.remove(device.address)
-                Log.w("BleMeshManager", "Error connecting to peer GATT ${device.address}", e)
+                if (settled.compareAndSet(false, true)) {
+                    timeoutJob.cancel()
+                    connectingDevices.remove(address)
+                    registerConnectFailure(backoffKey)
+                    Log.w("BleMeshManager", "Error connecting to peer GATT $address", e)
+                    reviveScanAfterConnect()
+                }
             }
         }
     }
 
     /**
-     * Sends [bytes] to every reachable iTantra peer over BLE GATT.
+     * Backoff identity for a connect target. The node id is stable for the life
+     * of the peer while its BLE address rotates every time it re-advertises, so
+     * keying on the address would let every retry through.
+     */
+    private fun connectBackoffKey(nodeId: Long?, address: String): String =
+        nodeId?.toString() ?: address
+
+    private fun isConnectBackedOff(key: String): Boolean =
+        System.currentTimeMillis() < (connectBackoffUntil[key] ?: 0L)
+
+    private fun registerConnectFailure(key: String) {
+        val failures = (connectFailures[key] ?: 0) + 1
+        connectFailures[key] = failures
+        val backoffMs = (GATT_BACKOFF_BASE_MS shl (failures - 1).coerceAtMost(4))
+            .coerceAtMost(GATT_BACKOFF_MAX_MS)
+        connectBackoffUntil[key] = System.currentTimeMillis() + backoffMs
+        Log.i("BleMeshManager", "GATT connect to $key failed (attempt $failures); backing off ${backoffMs}ms")
+    }
+
+    private fun clearConnectBackoff(key: String) {
+        connectFailures.remove(key)
+        connectBackoffUntil.remove(key)
+    }
+
+    /**
+     * Restarts the scan registration after a connect attempt ends.
      *
-     * @param targetNodeId when non-null, restricts direct writes to that node.
+     * Measured on device: a connect attempt leaves the scanner registered but
+     * silent, and it does not resume on its own — discovery only came back when
+     * the registration was bounced. Doing it here instead of waiting for the
+     * liveness watchdog cuts the resulting discovery gap from ~15s to ~0s, which
+     * is what keeps the peer above the staleness threshold on the radar.
+     */
+    private fun reviveScanAfterConnect() {
+        if (!scanRequested || !_isScanning.value) return
+        Log.i("BleMeshManager", "Bouncing scan after GATT connect attempt so discovery resumes")
+        runCatching { bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback) }
+        _isScanning.value = false
+        startScanningInternal()
+    }
+
+    /**
+     * Broadcasts [bytes] to the BLE mesh:
+     *  1. notifies any client currently connected to our local GATT server;
+     *  2. writes to connected GATT clients (and connects on demand if [connectIfNeeded] is true).
+     *
+     * @param targetNodeId when null, all connected and discovered peers are targeted;
+     *   when non-null, only the device matching that node ID is targeted.
      * @param connectIfNeeded when false, only peers that already hold a live
-     *   GATT link are written to. Real-time 20 ms voice frames use this so a
-     *   missing link degrades to "UDP only" instead of re-running GATT
-     *   discovery 50 times per second.
+     *   GATT link are written to. Defaults to false so passive radar discovery and
+     *   general broadcasts (profiles, telemetry) never initiate connection storms.
+     *   Only explicit, targeted point-to-point sends should set this to true.
      * @return number of GATT targets the packet was handed to (notify + write).
      */
     fun broadcastPacket(
         bytes: ByteArray,
         targetNodeId: Long? = null,
-        connectIfNeeded: Boolean = true
+        connectIfNeeded: Boolean = false
     ): Int {
         if (!hasBleConnect()) return 0
         var targets = 0
@@ -1193,7 +1339,9 @@ class BleMeshManager(context: Context) {
 
             discoveredDevices[payload.nodeId] = result.device
             nodeIdByAddress[result.device.address] = payload.nodeId
-            connectPeerGatt(result.device)
+            // Deliberately no connect here. Everything the radar needs is in this
+            // advertisement; a GATT link is opened on demand by broadcastPacket
+            // when there is actual traffic for the peer.
 
             Log.d(
                 "BleMeshManager",

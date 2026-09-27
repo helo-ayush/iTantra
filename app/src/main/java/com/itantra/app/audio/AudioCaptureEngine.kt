@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.PI
 import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -36,8 +37,21 @@ class AudioCaptureEngine(context: Context) {
         /** Margin (dB) above the noise floor required to trigger speech (5.5 dB for near-mic speech). */
         private const val SPEECH_TRIGGER_DB = 5.5
 
-        /** Number of consecutive loud frames before speech is declared (~40ms). */
-        private const val SPEECH_TRIGGER_FRAMES = 2
+        /**
+         * Number of consecutive loud frames before speech is declared (~80ms).
+         * Fan-blade amplitude modulation routinely punches 2-3 frames above
+         * the trigger; requiring 4 keeps those blips from opening the mic.
+         */
+        private const val SPEECH_TRIGGER_FRAMES = 4
+
+        /**
+         * First-order high-pass cutoff (Hz) applied to the VAD level estimate.
+         * Fan/motor rumble concentrates below ~120 Hz while speech carries
+         * most of its energy (harmonics, consonants) above it, so filtering
+         * here collapses the fan's dB margin without hurting near-mic voice.
+         * The raw PCM handed to STT is untouched — only the trigger sees this.
+         */
+        private const val HIGH_PASS_CUTOFF_HZ = 150.0
 
         /** Margin (dB) below which speech is considered ended (4.0 dB ensures fan noise doesn't lock VAD). */
         private const val SPEECH_RELEASE_DB = 4.0
@@ -102,6 +116,35 @@ class AudioCaptureEngine(context: Context) {
 
     @Volatile
     private var speaking = false
+
+    /**
+     * Per-turn voicing audit: while [speaking], every 20 ms frame is counted,
+     * and frames clearing [SPEECH_TRIGGER_DB] are counted as voiced. A fan
+     * holds the VAD open with frames hovering between release and trigger
+     * (low ratio); real speech punches clearly above trigger (high ratio).
+     * Reset at each trigger and whenever the turn state is dropped.
+     */
+    data class TurnVoicing(val voicedFrames: Int, val totalFrames: Int) {
+        val ratio: Float get() = if (totalFrames <= 0) 0f else voicedFrames.toFloat() / totalFrames
+    }
+
+    private var turnVoicedFrames = 0
+    private var turnTotalFrames = 0
+
+    /** Snapshot of the current turn's voicing (thread-safe; does not reset). */
+    @Synchronized
+    fun snapshotTurnVoicing(): TurnVoicing = TurnVoicing(turnVoicedFrames, turnTotalFrames)
+
+    @Synchronized
+    private fun resetTurnVoicing() {
+        turnVoicedFrames = 0
+        turnTotalFrames = 0
+    }
+
+    /** Current adaptive noise-floor estimate in raw RMS units (for pre-STT energy gates). */
+    @Volatile
+    private var noiseFloorLevel = MIN_NOISE_FLOOR
+    val currentNoiseFloor: Double get() = noiseFloorLevel
 
     private var captureThread: Thread? = null
 
@@ -208,6 +251,7 @@ class AudioCaptureEngine(context: Context) {
     fun stop() {
         running = false
         speaking = false
+        resetTurnVoicing()
         captureThread = null
         runCatching { record?.stop() }
         runCatching { record?.release() }
@@ -230,6 +274,11 @@ class AudioCaptureEngine(context: Context) {
         var silentFrames = 0
         var speakingFrames = 0
         var echoGuardWasActive = false
+        // First-order high-pass state (reset with the turn state so a stale
+        // DC estimate can never leak across an echo-guard drop).
+        var hpPrevIn = 0.0
+        var hpPrevOut = 0.0
+        val hpAlpha = 1.0 / (1.0 + 2.0 * PI * HIGH_PASS_CUTOFF_HZ / SAMPLE_RATE_HZ)
 
         while (running) {
             val read = try {
@@ -242,10 +291,16 @@ class AudioCaptureEngine(context: Context) {
 
             val pcmFrame = shortsToPcmLittleEndian(frameShorts)
 
-            // True RMS of frame (avoids differentiator filters that boost fan noise)
+            // High-passed RMS for the VAD estimate only: steady low-frequency
+            // fan/motor rumble is attenuated while speech transients pass.
+            // (The PCM handed to STT above is deliberately unfiltered.)
             var sumSq = 0.0
             for (x in frameShorts) {
-                sumSq += x.toDouble() * x.toDouble()
+                val input = x.toDouble()
+                val output = hpAlpha * (hpPrevOut + input - hpPrevIn)
+                hpPrevIn = input
+                hpPrevOut = output
+                sumSq += output * output
             }
             val rms = sqrt(sumSq / frameShorts.size)
 
@@ -269,6 +324,9 @@ class AudioCaptureEngine(context: Context) {
                 consecutiveSpeechFrames = 0
                 silentFrames = 0
                 speakingFrames = 0
+                resetTurnVoicing()
+                hpPrevIn = 0.0
+                hpPrevOut = 0.0
                 preSpeechBuffer.clear()
                 echoGuardWasActive = true
                 _level01.value = 0f
@@ -289,11 +347,16 @@ class AudioCaptureEngine(context: Context) {
                 silentFrames = 0
                 speakingFrames = 0
                 consecutiveSpeechFrames = 0
+                resetTurnVoicing()
+                hpPrevIn = 0.0
+                hpPrevOut = 0.0
                 preSpeechBuffer.clear()
             }
 
             if (speaking) {
                 speakingFrames++
+                turnTotalFrames++
+                if (marginDb >= SPEECH_TRIGGER_DB) turnVoicedFrames++
                 if (marginDb >= SPEECH_RELEASE_DB) {
                     silentFrames = 0
                 } else {
@@ -328,6 +391,7 @@ class AudioCaptureEngine(context: Context) {
                 if (consecutiveSpeechFrames >= SPEECH_TRIGGER_FRAMES) {
                     speaking = true
                     speakingFrames = 0
+                    resetTurnVoicing()
                     _speechActive.value = true
                     onSpeechStateChanged?.invoke(true)
                     silentFrames = 0
@@ -352,6 +416,7 @@ class AudioCaptureEngine(context: Context) {
                 }
             }
 
+            noiseFloorLevel = noiseFloor
             // Level in 0..1 derived from dBFS (-60 dB .. 0 dB).
             val level01 = ((20.0 * log10((rms / 32768.0).coerceAtLeast(1e-9)) + 60.0) / 60.0)
                 .toFloat().coerceIn(0f, 1f)

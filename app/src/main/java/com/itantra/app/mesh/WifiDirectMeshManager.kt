@@ -10,6 +10,7 @@ import android.net.MacAddress
 import android.net.wifi.WifiManager
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
+import android.net.wifi.p2p.WifiP2pGroup
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
 import android.net.wifi.p2p.WifiP2pManager.ActionListener
@@ -110,6 +111,15 @@ class WifiDirectMeshManager(context: Context) {
 
     private val _isP2pEnabled = MutableStateFlow(false)
     val isP2pEnabled: StateFlow<Boolean> = _isP2pEnabled.asStateFlow()
+
+    private val _groupNetworkName = MutableStateFlow<String?>(null)
+    val groupNetworkName: StateFlow<String?> = _groupNetworkName.asStateFlow()
+
+    private val _groupPassphrase = MutableStateFlow<String?>(null)
+    val groupPassphrase: StateFlow<String?> = _groupPassphrase.asStateFlow()
+
+    private val _connectedClients = MutableStateFlow<List<WifiP2pDevice>>(emptyList())
+    val connectedClients: StateFlow<List<WifiP2pDevice>> = _connectedClients.asStateFlow()
 
     /** Incoming datagrams from the mesh (voice frames, link requests, ...). */
     private val _incomingDatagrams = MutableSharedFlow<MeshDatagram>(
@@ -237,11 +247,15 @@ class WifiDirectMeshManager(context: Context) {
                     registerPeerIp(goHost)
                     Log.i("WifiDirectMeshManager", "Added Wi-Fi Direct Group Owner IP: $goHost")
                 }
+                requestGroupInfoSafe()
             }
         }
         if (info?.groupFormed == false) {
             _isGroupOwner.value = false
             _localIpAddress.value = null
+            _groupNetworkName.value = null
+            _groupPassphrase.value = null
+            _connectedClients.value = emptyList()
         }
     }
 
@@ -356,19 +370,80 @@ class WifiDirectMeshManager(context: Context) {
      * that link on chipsets without STA+P2P concurrency, so it is only done for
      * a distress device, which must be findable regardless of what network it
      * happens to be sitting on.
+     * @param preferredSsid custom SSID (must start with DIRECT-) used on API 29+
+     * @param preferredPassphrase custom WPA2 passphrase (min 8 chars) used on API 29+
      */
-    fun createGroup(allowOverLan: Boolean = false) {
+    fun createGroup(
+        allowOverLan: Boolean = false,
+        preferredSsid: String? = null,
+        preferredPassphrase: String? = null
+    ) {
+        val ch = channel ?: return
         if (manager == null) return
         if (_isGroupFormed.value) return
         if (!allowOverLan && isWifiConnected()) {
             Log.i("WifiDirectMeshManager", "Already connected to Wi-Fi LAN; skipping P2P group creation to preserve LAN link")
             return
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && preferredSsid != null && preferredPassphrase != null) {
+            try {
+                val config = WifiP2pConfig.Builder()
+                    .setNetworkName(preferredSsid)
+                    .setPassphrase(preferredPassphrase)
+                    .build()
+                manager?.createGroup(ch, config, object : ActionListener {
+                    override fun onSuccess() {
+                        Log.i("WifiDirectMeshManager", "createGroup(config) accepted with SSID $preferredSsid")
+                        requestGroupInfoSafe()
+                    }
+
+                    override fun onFailure(reason: Int) {
+                        Log.w("WifiDirectMeshManager", "createGroup(config) failed ($reason), falling back to standard createGroup")
+                        createGroupStandard()
+                    }
+                })
+                return
+            } catch (e: Exception) {
+                Log.w("WifiDirectMeshManager", "createGroup(config) threw, falling back to standard createGroup", e)
+            }
+        }
+        createGroupStandard()
+    }
+
+    private fun createGroupStandard() {
+        val ch = channel ?: return
         try {
-            manager?.createGroup(channel, groupActionListener("createGroup"))
+            manager?.createGroup(ch, object : ActionListener {
+                override fun onSuccess() {
+                    Log.i("WifiDirectMeshManager", "createGroup standard accepted")
+                    requestGroupInfoSafe()
+                }
+
+                override fun onFailure(reason: Int) {
+                    lastJoinErrorReason = reason
+                    Log.w("WifiDirectMeshManager", "createGroup standard failed reason=$reason")
+                }
+            })
             Log.i("WifiDirectMeshManager", "Requested Wi-Fi Direct P2P group creation")
         } catch (e: Exception) {
             Log.w("WifiDirectMeshManager", "createGroup threw exception", e)
+        }
+    }
+
+    /** Requests fresh group info (SSID, passphrase, client list). */
+    fun requestGroupInfoSafe() {
+        if (manager == null || !hasDiscoveryPermission()) return
+        try {
+            manager?.requestGroupInfo(channel) { group ->
+                if (group != null) {
+                    _groupNetworkName.value = group.networkName
+                    _groupPassphrase.value = group.passphrase
+                    _connectedClients.value = group.clientList?.toList() ?: emptyList()
+                    Log.i("WifiDirectMeshManager", "Group info available: ssid=${group.networkName} isGO=${group.isGroupOwner} clients=${_connectedClients.value.size}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("WifiDirectMeshManager", "requestGroupInfoSafe threw exception", e)
         }
     }
 
@@ -377,6 +452,9 @@ class WifiDirectMeshManager(context: Context) {
         if (manager == null) return
         try {
             joiningAddress.set(null)
+            _groupNetworkName.value = null
+            _groupPassphrase.value = null
+            _connectedClients.value = emptyList()
             manager?.removeGroup(channel, actionLog)
         } catch (_: Exception) {
         }
@@ -419,26 +497,32 @@ class WifiDirectMeshManager(context: Context) {
         lastJoinAttemptEpochMs = now
         joiningAddress.set(candidate.address)
         Log.i("WifiDirectMeshManager", "Auto-joining P2P group of ${candidate.name} (${candidate.address})")
-        connectTo(candidate)
+        connectTo(candidate, asGroupOwner = false)
         return true
     }
 
-    /** Connects to [peer] with a high group-owner intent. */
-    fun connectTo(peer: PeerDevice) {
+    /**
+     * Connects to [peer].
+     *
+     * @param asGroupOwner when false (default for joining devices/rescuers), groupOwnerIntent is set to 0
+     * so the connecting device does not challenge or conflict with an existing Group Owner.
+     */
+    fun connectTo(peer: PeerDevice, asGroupOwner: Boolean = false) {
         if (manager == null || !hasDiscoveryPermission()) return
         try {
+            val goIntent = if (asGroupOwner) 15 else 0
             // API 33+ hides the plain constructor and the Builder only takes
             // MacAddress; groupOwnerIntent stays a public field either way.
             val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 WifiP2pConfig.Builder()
                     .setDeviceAddress(MacAddress.fromString(peer.address))
                     .build()
-                    .apply { groupOwnerIntent = 15 }
+                    .apply { groupOwnerIntent = goIntent }
             } else {
                 @Suppress("DEPRECATION")
                 WifiP2pConfig().apply {
                     deviceAddress = peer.address
-                    groupOwnerIntent = 15
+                    groupOwnerIntent = goIntent
                 }
             }
             manager?.connect(channel, config, groupActionListener("connect(${peer.address})"))

@@ -717,7 +717,14 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                         )
                         // A distress device must be findable even when it happens
                         // to be sitting on an infrastructure Wi-Fi network.
-                        mesh?.createGroup(allowOverLan = _isSosBroadcasting.value)
+                        val sosSsid = if (_isSosBroadcasting.value) {
+                            "DIRECT-IT-${(kotlin.math.abs(_nodeId.value) % 10000).toString().padStart(4, '0')}"
+                        } else null
+                        mesh?.createGroup(
+                            allowOverLan = _isSosBroadcasting.value,
+                            preferredSsid = sosSsid,
+                            preferredPassphrase = if (sosSsid != null) "itantra911sos" else null
+                        )
                         mesh?.startUdpBroadcast()
                         cyclesWithoutGroup = 0
                     }
@@ -814,11 +821,15 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         // Real BLE distress beacon (foreground service + in-process fallback).
         syncBeaconAdvertising()
 
-        // Wi-Fi Direct UDP mesh so rescuers can send voice-link packets. Group
-        // formation is deliberately left to syncWifiDirectScan's discovery loop:
-        // it joins a peer's group when one is visible and only forms its own
-        // when nobody is there to join, which is what stops two phones from
-        // ending up as rival group owners that can never see each other.
+        // Wi-Fi Direct: SOS device pre-creates an Autonomous Group immediately.
+        // Creating a group shows 0 prompts on the victim's phone (silent host),
+        // and incoming rescuers join as clients with prompts landing solely on the rescuer.
+        val sosSsid = "DIRECT-IT-${(kotlin.math.abs(_nodeId.value) % 10000).toString().padStart(4, '0')}"
+        wifiDirectMeshManager?.createGroup(
+            allowOverLan = true,
+            preferredSsid = sosSsid,
+            preferredPassphrase = "itantra911sos"
+        )
         wifiDirectMeshManager?.startUdpBroadcast()
         syncWifiDirectScan()
         syncUdpPresenceTelemetry()

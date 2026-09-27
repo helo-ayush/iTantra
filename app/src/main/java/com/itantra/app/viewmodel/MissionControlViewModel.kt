@@ -1041,8 +1041,9 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     fun startPtt() {
         if (_isWalkieActive.value && !_isRescueActive.value && !_isSosBroadcasting.value) {
-            if (settingsRepository.pairedWalkieNodeIds.value.isEmpty()) {
-                _modelWarningMessage.value = "⚠️ No Paired Radios: Please pair with a nearby team radio before transmitting voice."
+            val inP2pGroup = wifiDirectMeshManager?.isGroupFormed?.value == true
+            if (settingsRepository.pairedWalkieNodeIds.value.isEmpty() && !inP2pGroup) {
+                _modelWarningMessage.value = "⚠️ No Paired Radios: Please pair with a nearby team radio or join a Wi-Fi Direct group before transmitting voice."
                 return
             }
         }
@@ -2421,8 +2422,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             }
             PacketFraming.MSG_TYPE_TRANSLATED_TEXT -> {
                 if (_isWalkieActive.value && !_isRescueActive.value && !_isSosBroadcasting.value) {
-                    if (!settingsRepository.pairedWalkieNodeIds.value.contains(packet.nodeId)) {
-                        logVoice("rx", "walkie text dropped: sender ${nodeCallsign(packet.nodeId)} is not paired")
+                    val inP2pGroup = wifiDirectMeshManager?.isGroupFormed?.value == true
+                    val isPaired = settingsRepository.pairedWalkieNodeIds.value.contains(packet.nodeId)
+                    if (!isPaired && !inP2pGroup) {
+                        logVoice("rx", "walkie text dropped: sender ${nodeCallsign(packet.nodeId)} is neither paired nor in P2P group")
                         return
                     }
                 }
@@ -2948,9 +2951,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             return true
         }
         if (_isWalkieActive.value && !_isRescueActive.value && !_isSosBroadcasting.value) {
+            val inP2pGroup = wifiDirectMeshManager?.isGroupFormed?.value == true
             val isPaired = settingsRepository.pairedWalkieNodeIds.value.contains(senderNodeId)
-            if (!isPaired) {
-                logVoice("rx", "walkie audio suppressed: sender ${nodeCallsign(senderNodeId)} ($senderNodeId) is not in paired list")
+            if (!isPaired && !inP2pGroup) {
+                logVoice("rx", "walkie audio suppressed: sender ${nodeCallsign(senderNodeId)} ($senderNodeId) is neither paired nor in P2P group")
                 return false
             }
             return true

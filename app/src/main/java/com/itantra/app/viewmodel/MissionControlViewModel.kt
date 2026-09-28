@@ -3537,7 +3537,18 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             }
 
             val peerLang = _activePeerLanguage.value
-            val isCrossLingual = peerLang != null && !peerLang.equals(langCode, ignoreCase = true)
+            // Send rule (link state decides, nothing else): same language on
+            // both sides -> native passthrough; anything else on an active
+            // 1-to-1 link (peer known-foreign, or peer language not arrived
+            // yet) -> English, so the wire carries only native or English.
+            // Group/walkie chatter with no link peer stays native as before.
+            val inDirectLink = _connectedVictimIntercom.value != null ||
+                _connectedRescuer.value != null
+            val isCrossLingual = if (peerLang != null) {
+                !peerLang.equals(langCode, ignoreCase = true)
+            } else {
+                inDirectLink
+            }
             // Legacy global flag OR our own pivot leg (own language -> English).
             // The receiver covers English -> its own language with ITS pack,
             // so the sender must never require the peer's pack locally —
@@ -3630,7 +3641,15 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         val langCode = selectedLang.code
 
         val peerLang = _activePeerLanguage.value
-        val isCrossLingual = peerLang != null && !peerLang.equals(langCode, ignoreCase = true)
+        // Same send rule as flushVoiceTurn: same language -> native,
+        // otherwise English on an active link, native for link-less chatter.
+        val inDirectLink = _connectedVictimIntercom.value != null ||
+            _connectedRescuer.value != null
+        val isCrossLingual = if (peerLang != null) {
+            !peerLang.equals(langCode, ignoreCase = true)
+        } else {
+            inDirectLink
+        }
         // Own pivot leg only (see flushVoiceTurn): the peer covers its side.
         val localHasTranslator = translationEngine.isInstalled() ||
             translationEngine.canTranslate(langCode, "en")

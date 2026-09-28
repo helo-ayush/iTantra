@@ -2004,7 +2004,10 @@ fun MinimalBrightMapCanvas(
                 val badgePadPx = with(density) { 16.dp.toPx() }
 
                 currentVictims.forEach { victim ->
-                    val angleRad = Math.toRadians(victim.relativeBearingDegrees.toDouble() - 90.0)
+                    // Heading-up map: a pin is drawn at (true bearing - compass
+                    // heading) so "up" is always the direction the rescuer faces.
+                    // Hit-testing must use the same rotation as the render pass.
+                    val angleRad = Math.toRadians((victim.relativeBearingDegrees - currentCompassHeading).toDouble() - 90.0)
                     val normDist = (victim.distanceMeters / 90f).coerceIn(0.15f, 0.92f)
                     val r = normDist * maxRadius
                     val vx = cx + (r * cos(angleRad)).toFloat()
@@ -2118,7 +2121,9 @@ fun MinimalBrightMapCanvas(
 
         val cardinalDirections = listOf("N" to 0f, "E" to 90f, "S" to 180f, "W" to 270f)
         cardinalDirections.forEach { (label, bearing) ->
-            val angleRad = Math.toRadians(bearing.toDouble() - 90.0)
+            // Heading-up: cardinals sit at (true bearing - compass heading) so
+            // "N" points to real north on screen whichever way the phone faces.
+            val angleRad = Math.toRadians((bearing - currentCompassHeading).toDouble() - 90.0)
             val labelR = maxRadius * 1.06f
             val lx = cx + (labelR * cos(angleRad)).toFloat()
             val ly = cy + (labelR * sin(angleRad)).toFloat() + 3.dp.toPx()
@@ -2145,7 +2150,9 @@ fun MinimalBrightMapCanvas(
         }
 
         victims.forEach { victim ->
-            val angleRad = Math.toRadians(victim.relativeBearingDegrees.toDouble() - 90.0)
+            // Heading-up placement: subtract the compass heading so a victim
+            // directly ahead of the rescuer renders at the top of the radar.
+            val angleRad = Math.toRadians((victim.relativeBearingDegrees - currentCompassHeading).toDouble() - 90.0)
             val normDist = (victim.distanceMeters / 90f).coerceIn(0.15f, 0.92f)
             val r = normDist * maxRadius
             val vx = cx + (r * cos(angleRad)).toFloat()
@@ -2212,38 +2219,36 @@ fun MinimalBrightMapCanvas(
             }
         }
 
-        // 6. Rescuer GPS Location Puck at Center with rotating vision cone & chevron
-        withTransform({
-            rotate(currentCompassHeading, pivot = Offset(cx, cy))
-        }) {
-            val conePath = Path().apply {
-                moveTo(cx, cy)
-                lineTo(cx - 24.dp.toPx(), cy - 55.dp.toPx())
-                lineTo(cx + 24.dp.toPx(), cy - 55.dp.toPx())
-                close()
-            }
-            drawPath(
-                path = conePath,
-                brush = Brush.verticalGradient(
-                    colors = listOf(colors.accent.copy(alpha = 0.20f), Color.Transparent),
-                    startY = cy - 50.dp.toPx(),
-                    endY = cy
-                )
-            )
-            // Forward Chevron Arrow
-            drawLine(
-                color = Color.White,
-                start = Offset(cx, cy - 10.dp.toPx()),
-                end = Offset(cx - 4.dp.toPx(), cy - 4.dp.toPx()),
-                strokeWidth = 2.dp.toPx()
-            )
-            drawLine(
-                color = Color.White,
-                start = Offset(cx, cy - 10.dp.toPx()),
-                end = Offset(cx + 4.dp.toPx(), cy - 4.dp.toPx()),
-                strokeWidth = 2.dp.toPx()
-            )
+        // 6. Rescuer puck at center with an upward vision cone & chevron.
+        // The map is heading-up (the world rotates, not the rescuer), so the
+        // cone always points to the top of the screen — the direction faced.
+        val conePath = Path().apply {
+            moveTo(cx, cy)
+            lineTo(cx - 24.dp.toPx(), cy - 55.dp.toPx())
+            lineTo(cx + 24.dp.toPx(), cy - 55.dp.toPx())
+            close()
         }
+        drawPath(
+            path = conePath,
+            brush = Brush.verticalGradient(
+                colors = listOf(colors.accent.copy(alpha = 0.20f), Color.Transparent),
+                startY = cy - 50.dp.toPx(),
+                endY = cy
+            )
+        )
+        // Forward Chevron Arrow
+        drawLine(
+            color = Color.White,
+            start = Offset(cx, cy - 10.dp.toPx()),
+            end = Offset(cx - 4.dp.toPx(), cy - 4.dp.toPx()),
+            strokeWidth = 2.dp.toPx()
+        )
+        drawLine(
+            color = Color.White,
+            start = Offset(cx, cy - 10.dp.toPx()),
+            end = Offset(cx + 4.dp.toPx(), cy - 4.dp.toPx()),
+            strokeWidth = 2.dp.toPx()
+        )
 
         // Center Rescuer Marker
         drawCircle(

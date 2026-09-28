@@ -6,6 +6,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.GeomagneticField
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -52,6 +53,7 @@ import com.itantra.app.mesh.ProfilePayload
 import com.itantra.app.mesh.VoiceFrame
 import com.itantra.app.mesh.WifiDirectMeshManager
 import com.itantra.app.mesh.fallbackNodeLabel
+import com.itantra.app.mesh.DistanceSmoother
 import com.itantra.app.mesh.estimateMeters
 import com.itantra.app.mesh.fuseGpsAndBleDistance
 import com.itantra.app.mesh.smoothCompassHeading
@@ -235,6 +237,24 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
      * "is this node close enough for GATT" — see [peerInBleRange].
      */
     private val lastBleBeaconSeenMs = ConcurrentHashMap<Long, Long>()
+
+    /**
+     * Per-node spike-rejecting smoothers for the distance published to the radar.
+     * The fused GPS/BLE result can lurch by hundreds of metres on a single noisy
+     * sample; these damp that so the pin distance stays readable while walking.
+     */
+    private val distanceSmoothers = ConcurrentHashMap<Long, DistanceSmoother>()
+
+    /**
+     * Runs a fused distance through the node's [DistanceSmoother]. The explicit
+     * "unknown/far" sentinel is passed through untouched so the BLE->Wi-Fi
+     * carry-over logic in [refreshMergedPeerLists] still recognises it.
+     */
+    private fun smoothVictimDistance(nodeId: Long, fusedMeters: Int): Int {
+        if (fusedMeters == UDP_UNRANGED_DISTANCE_METERS) return fusedMeters
+        val smoother = distanceSmoothers.getOrPut(nodeId) { DistanceSmoother(fusedMeters) }
+        return smoother.update(fusedMeters)
+    }
 
     /**
      * Presence adverts received over the UDP mesh, synthesised into
@@ -1451,7 +1471,19 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     private val _isBroadcastingToAll = MutableStateFlow(false)
     val isBroadcastingToAll: StateFlow<Boolean> = _isBroadcastingToAll.asStateFlow()
 
-    private val _compassHeading = MutableStateFlow(32f) // Rescuer compass heading (0..360°)
+    private val _compassHeading = MutableStateFlow(0f) // Rescuer true-north heading (0..360°)
+
+    /**
+     * Local magnetic declination in degrees (magnetic north -> true north).
+     *
+     * [SensorManager.getOrientation] reports azimuth relative to *magnetic*
+     * north, but victim bearings from [calculateBearingDegrees] are relative to
+     * *true* north. Without this correction the rescuer cone is rotated away
+     * from the pins by the local declination, so on-screen directions are off by
+     * a fixed number of degrees that only depends on where you are. Recomputed
+     * on each GPS fix; stays 0 until then.
+     */
+    private var magneticDeclinationDegrees = 0f
     val compassHeading: StateFlow<Float> = _compassHeading.asStateFlow()
 
     private val _selectedVictim = MutableStateFlow<DistressVictim?>(null)
@@ -1549,6 +1581,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             udpBeacons.clear()
             latestBleBeacons = emptyList()
             lastBleBeaconSeenMs.clear()
+            distanceSmoothers.clear()
             syncVoiceCaptureState()
             stopMeshUdpIfIdle()
             _modelWarningMessage.value = null
@@ -1758,8 +1791,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
                 SensorManager.getOrientation(rotationMatrix, orientationAngles)
                 val azimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
-                val rawAzimuth = (azimuth % 360f + 360f) % 360f
-                _compassHeading.value = smoothCompassHeading(_compassHeading.value, rawAzimuth)
+                publishTrueHeading(azimuth)
             }
             Sensor.TYPE_ACCELEROMETER -> {
                 System.arraycopy(event.values, 0, lastAccelerometer, 0, event.values.size)
@@ -1782,10 +1814,22 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             if (SensorManager.getRotationMatrix(rotationMatrix, null, lastAccelerometer, lastMagnetometer)) {
                 SensorManager.getOrientation(rotationMatrix, orientationAngles)
                 val azimuth = Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
-                val rawAzimuth = (azimuth % 360f + 360f) % 360f
-                _compassHeading.value = smoothCompassHeading(_compassHeading.value, rawAzimuth)
+                publishTrueHeading(azimuth)
             }
         }
+    }
+
+    /**
+     * Converts a magnetic-north azimuth from [SensorManager.getOrientation] into
+     * a true-north heading (adding the local declination), normalises it to
+     * 0..360° and low-pass filters it into [_compassHeading]. Keeping the map
+     * heading in the same true-north frame as the GPS bearings is what stops the
+     * whole scene being rotated by a fixed declination offset.
+     */
+    private fun publishTrueHeading(magneticAzimuthDeg: Float) {
+        val trueAzimuth = magneticAzimuthDeg + magneticDeclinationDegrees
+        val normalized = ((trueAzimuth % 360f) + 360f) % 360f
+        _compassHeading.value = smoothCompassHeading(_compassHeading.value, normalized)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -1800,6 +1844,12 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             _rescuerLat.value = location.latitude
             _rescuerLon.value = location.longitude
             _hasGpsFix.value = true
+            magneticDeclinationDegrees = GeomagneticField(
+                location.latitude.toFloat(),
+                location.longitude.toFloat(),
+                location.altitude.toFloat(),
+                System.currentTimeMillis()
+            ).declination
             recalculateVictimDistances()
 
             // Position is part of every beacon payload, but re-advertising on
@@ -1895,7 +1945,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                         estimateMeters(v.signalDbm).roundToInt().coerceAtLeast(1)
                     }
                     val dist = fuseGpsAndBleDistance(gpsDist, bleDist, v.signalDbm)
-                    v.copy(distanceMeters = dist, relativeBearingDegrees = bearing)
+                    v.copy(distanceMeters = smoothVictimDistance(v.nodeId, dist), relativeBearingDegrees = bearing)
                 } else {
                     v
                 }
@@ -2140,16 +2190,23 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         val hasValidBothCoords = curLat != 0.0 && curLon != 0.0 && latitudeDeg != 0.0 && longitudeDeg != 0.0
         val results = FloatArray(1)
         val bleDist = estimatedDistanceMeters.roundToInt().coerceAtLeast(1)
-        val (finalDistance, bearing) = if (hasValidBothCoords) {
+        // Range off the Kalman-smoothed RSSI, not the raw sample: the fusion
+        // thresholds (-68/-76/-86 dBm) decide between a short BLE clamp and the
+        // raw GPS distance, so a single noisy sample straddling -86 dBm is what
+        // makes the published distance lurch from ~15m to a GPS-scale number and
+        // back on the next tick.
+        val rangingRssi = smoothedRssi
+        val (fusedDistance, bearing) = if (hasValidBothCoords) {
             Location.distanceBetween(curLat, curLon, latitudeDeg, longitudeDeg, results)
             val gpsDist = results[0].toInt().coerceAtLeast(1)
             val calcBearing = calculateBearingDegrees(curLat, curLon, latitudeDeg, longitudeDeg)
-            val dist = fuseGpsAndBleDistance(gpsDist, bleDist, rssi)
+            val dist = fuseGpsAndBleDistance(gpsDist, bleDist, rangingRssi)
             dist to calcBearing
         } else {
             val calcBearing = (((nodeId * 37L) % 360L).toFloat() + 360f) % 360f
             bleDist to calcBearing
         }
+        val finalDistance = smoothVictimDistance(nodeId, fusedDistance)
 
         val profile = peerProfiles.get(nodeId)
         return DistressVictim(
@@ -2157,7 +2214,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             nodeId = nodeId,
             callsign = nodeCallsign(nodeId),
             distanceMeters = finalDistance,
-            signalDbm = rssi,
+            signalDbm = rangingRssi,
             language = language,
             batteryPercent = batteryPercent.coerceIn(0, 100),
             activeMinutes = ((now - firstSeen) / 60000L).toInt().coerceAtLeast(0),
@@ -2407,6 +2464,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             refreshWalkieDevicesList()
         }
         beaconFirstSeen.keys.retainAll(beacons.map { it.nodeId }.toSet())
+        distanceSmoothers.keys.retainAll(beacons.map { it.nodeId }.toSet())
 
         // Prompt identity exchange: a peer that just appeared gets our profile
         // immediately instead of waiting for the next periodic advert. Flood

@@ -183,7 +183,14 @@ data class DiscoveredBeacon(
     val altitudeMeters: Int = 0,
     val languageIso: String,
     val isDistress: Boolean,
-    val lastSeenEpochMs: Long
+    val lastSeenEpochMs: Long,
+    /**
+     * Kalman-smoothed RSSI in dBm. Ranging decisions must key off this rather
+     * than the raw [rssi]: a single noisy sample straddling a fusion threshold
+     * is what makes the radar distance flicker. Defaults to [rssi] so synthetic
+     * (UDP-only) beacons, which carry no radio ranging, keep their sentinel.
+     */
+    val smoothedRssi: Int = rssi
 )
 
 /** Advertise TX power level mapped onto the platform constants. */
@@ -1365,7 +1372,8 @@ class BleMeshManager(context: Context) {
                 altitudeMeters = payload.altitudeMeters,
                 languageIso = payload.languageIso,
                 isDistress = payload.isDistress,
-                lastSeenEpochMs = System.currentTimeMillis()
+                lastSeenEpochMs = System.currentTimeMillis(),
+                smoothedRssi = tracker.currentRssi
             )
             synchronized(latest) {
                 latest[beacon.nodeId] = beacon

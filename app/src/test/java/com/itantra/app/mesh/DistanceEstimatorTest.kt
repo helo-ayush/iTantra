@@ -117,7 +117,6 @@ class DistanceEstimatorTest {
 
     @Test
     fun smoothCompassHeadingHandlesZeroWrapCorrectly() {
-        // Wrapping clockwise across 0° (from 355° to 5°)
         val clockwise = smoothCompassHeading(prev = 355f, target = 5f, alpha = 0.5f)
         // Shortest diff is +10°, so 355 + 5 = 360° -> 0°
         assertEquals(0f, clockwise, 0.5f)
@@ -126,5 +125,34 @@ class DistanceEstimatorTest {
         val counterClockwise = smoothCompassHeading(prev = 5f, target = 355f, alpha = 0.5f)
         // Shortest diff is -10°, so 5 - 5 = 0°
         assertEquals(0f, counterClockwise, 0.5f)
+    }
+
+    @Test
+    fun distanceSmootherPublishesSeedOnFirstReading() {
+        val smoother = DistanceSmoother(initialMeters = 123)
+        assertEquals(123, smoother.update(123))
+    }
+
+    @Test
+    fun distanceSmootherRejectsSingleFarSpike() {
+        // Reported bug: a close pin (~15m) randomly lurches to a GPS-scale
+        // number (~480m) for one frame, then returns. A single impulse frame
+        // must be discarded outright, never published.
+        val smoother = DistanceSmoother(initialMeters = 15)
+        repeat(3) { smoother.update(15) }
+        val duringSpike = smoother.update(480)
+        assertTrue("a single 15m->480m spike must not move the pin (got $duringSpike)", duringSpike <= 20)
+        val afterSpike = smoother.update(15)
+        assertTrue("distance must stay at ~15m once the spike clears (got $afterSpike)", afterSpike <= 20)
+    }
+
+    @Test
+    fun distanceSmootherAdoptsSustainedMovement() {
+        // A genuine walk from 15m out to 60m is a sustained change, not an
+        // impulse, so the median filter must adopt it within a couple of frames.
+        val smoother = DistanceSmoother(initialMeters = 15)
+        repeat(3) { smoother.update(15) }
+        repeat(8) { smoother.update(60) }
+        assertEquals(60.0, smoother.currentMeters.toDouble(), 2.0)
     }
 }

@@ -3,6 +3,7 @@ package com.itantra.app.mesh
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -150,6 +151,10 @@ class RangedNodeDistanceTracker(
     /** Direct (unfiltered) RSSI -> meters conversion. */
     fun rssiToDistance(rssi: Int): Double = estimateMeters(rssi, txPowerDbm, pathLossExponent)
 
+    /** The current Kalman-smoothed RSSI estimate, in dBm. */
+    val currentRssi: Int
+        get() = filter.currentEstimate.toInt()
+
     /** Distance of the current smoothed RSSI estimate, in meters. */
     val currentDistanceMeters: Double
         get() = rssiToDistance(filter.currentEstimate.toInt())
@@ -166,4 +171,61 @@ class RangedNodeDistanceTracker(
 
     /** Resets the underlying filter. */
     fun reset() = filter.reset()
+}
+
+/**
+ * Spike-rejecting smoother for a published distance reading, in meters.
+ *
+ * The radar fuses GPS and BLE ranging, and the two disagree violently at the
+ * BLE fringe: one noisy sample can flip the fused result from ~15m to a raw GPS
+ * estimate of several hundred meters and back on the next tick. That shows up as
+ * the pin distance flickering while the rescuer walks.
+ *
+ * This is classic impulse noise, so a 3-sample median filter is the right tool:
+ * a single outlier frame is discarded outright (the median of {15, 480, 15} is
+ * 15), while a *sustained* new distance is adopted within two frames. A light
+ * EMA on top of the median keeps the number from stepping visibly.
+ *
+ * The window is seeded with the constructor value, so the first reading is
+ * published exactly and later single-frame jumps cannot move it.
+ */
+class DistanceSmoother(initialMeters: Int) {
+    private val seed = initialMeters.coerceAtLeast(1)
+    private val window = ArrayDeque<Int>()
+    private var smoothed: Double = seed.toDouble()
+
+    init {
+        repeat(WINDOW) { window.addLast(seed) }
+    }
+
+    /** The current smoothed distance, in meters. */
+    val currentMeters: Int
+        get() = smoothed.roundToInt().coerceAtLeast(1)
+
+    /**
+     * Feeds a new fused distance measurement and returns the smoothed value.
+     */
+    fun update(measuredMeters: Int): Int {
+        val m = measuredMeters.coerceAtLeast(1)
+        window.addLast(m)
+        if (window.size > WINDOW) window.removeFirst()
+        val median = window.toList().sorted()[window.size / 2]
+        smoothed += (median - smoothed) * ALPHA
+        return currentMeters
+    }
+
+    /** Clears the window back to the seed so a re-acquired node starts fresh. */
+    fun reset() {
+        window.clear()
+        repeat(WINDOW) { window.addLast(seed) }
+        smoothed = seed.toDouble()
+    }
+
+    companion object {
+        /** Median window; 3 rejects a single impulse frame with minimal lag. */
+        const val WINDOW = 3
+
+        /** Output EMA applied to the median — light, just to avoid visible steps. */
+        const val ALPHA = 0.5
+    }
 }

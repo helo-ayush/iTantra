@@ -648,16 +648,29 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _activePeerLanguage.value = peerLang
 
         if (peerNodeId != null && peerLang != null && !peerLang.equals(localLang, ignoreCase = true)) {
-            // Pivot rule: we only ever need OUR leg (own language -> English);
-            // the peer covers English -> its language with its own pack. The
-            // link stays open while either side can do its leg.
-            val localHasTranslator = translationEngine.canTranslate(localLang, "en")
+            // Pivot rule, per direction: WE only ever need OUR leg (own
+            // language -> English). The peer must be able to put English on
+            // the wire too — either it speaks English, or it reports a
+            // translator (its own pack covers its leg). The link stays open
+            // only while BOTH directions flow; otherwise the mic stops and
+            // the prompt names the missing side, instead of trading garbage
+            // audio both ways.
+            //
+            //   Gujarati (no pack) x Tamil (packed): out dead -> prohibited.
+            //   Hindi (packed) x Tamil (packed): both live -> open.
+            val outWorks = translationEngine.isInstalled() ||
+                translationEngine.canTranslate(localLang, "en")
             val peerHasTranslator = peerTranslatorAvailable[peerNodeId] == true
-            if (!localHasTranslator && !peerHasTranslator) {
+            val inWorks = peerLang.equals("en", ignoreCase = true) || peerHasTranslator
+            if (!(outWorks && inWorks)) {
                 _isCrossLingualBlocked.value = true
                 val localName = SupportedLanguage.fromCode(localLang).englishName
                 val peerName = SupportedLanguage.fromCode(peerLang).englishName
-                _modelWarningMessage.value = "⚠️ Language Mismatch: Local speaks $localName but peer speaks $peerName. Offline Translation model required before voice conversation. Please download in Settings → Models."
+                _modelWarningMessage.value = if (!outWorks) {
+                    "⚠️ Cannot talk with $peerName speaker: download the $localName translator first (Settings → Models → $localName card). Without it they would only hear untranslated $localName."
+                } else {
+                    "⚠️ $peerName speaker cannot reply yet: ask them to download their $peerName translator. Without it you would only hear untranslated $peerName."
+                }
                 syncVoiceCaptureState()
                 return
             }

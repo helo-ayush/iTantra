@@ -328,6 +328,133 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     )
     val translationDownloadState: StateFlow<ModelDownloadState> = _translationDownloadState.asStateFlow()
 
+    /**
+     * One row of the Settings translate-pack list. Per-language granularity:
+     * downloading Hindi unlocks Hindi against every other downloaded language
+     * (ML Kit stores one pack per language, not per pair), so a user who only
+     * ever talks to Hindi speakers downloads exactly one pack.
+     */
+    data class TranslatePackUiState(
+        val iso: String,
+        val displayName: String,
+        val backendLabel: String,
+        val detailText: String,
+        val sizeText: String,
+        val installed: Boolean,
+        val downloading: Boolean,
+        val pendingVerification: Boolean
+    )
+
+    private val _translatePacks = MutableStateFlow<List<TranslatePackUiState>>(emptyList())
+    val translatePacks: StateFlow<List<TranslatePackUiState>> = _translatePacks.asStateFlow()
+
+    private val _translateDownloading = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Rebuilds the per-language translate list from on-disk ML Kit state. */
+    fun refreshTranslatePacks() {
+        translationEngine.mlKitDownloadedIsos { downloaded ->
+            val rows = SupportedLanguage.values().map { lang ->
+                val iso = lang.code
+                if (iso in TranslationEngine.MLKIT_ISOS) {
+                    TranslatePackUiState(
+                        iso = iso,
+                        displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
+                        backendLabel = "Google ML Kit · on-device",
+                        detailText = "One ${lang.englishName.lowercase()} pack unlocks it against every other " +
+                            "downloaded language, both directions. ~30MB: compact distilled translators.",
+                        sizeText = "≈30 MB",
+                        installed = iso in downloaded,
+                        downloading = iso in _translateDownloading.value,
+                        pendingVerification = false
+                    )
+                } else {
+                    val fillers = TranslationEngine.OPUS_FILLERS.filter { it.iso == iso }
+                    TranslatePackUiState(
+                        iso = iso,
+                        displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
+                        backendLabel = "OPUS-MT bilingual (Helsinki) · pending verification",
+                        detailText = "ML Kit ships no ${lang.englishName.lowercase()} pack. Identified fillers: " +
+                            fillers.joinToString { "${it.direction} (${it.hfRepo.substringAfter("/")})" } +
+                            ". Upstream research weights → ~60–80MB on-phone INT8 each after conversion. " +
+                            "Downloads unlock after the per-direction quality protocol passes.",
+                        sizeText = "~70 MB × 2 (projected)",
+                        installed = false,
+                        downloading = false,
+                        pendingVerification = true
+                    )
+                }
+            }
+            _translatePacks.value = rows
+            val anyInstalled = rows.any { it.installed }
+            _isTranslationModelInstalled.value = anyInstalled || translationEngine.isInstalled()
+            if (anyInstalled && _translationDownloadState.value !is ModelDownloadState.Downloading) {
+                _translationDownloadState.value = ModelDownloadState.Installed
+            }
+        }
+    }
+
+    /** Downloads one language pack (ML Kit). No-op for pending-verification rows. */
+    fun downloadTranslatePack(iso: String) {
+        val code = iso.lowercase()
+        if (code !in TranslationEngine.MLKIT_ISOS) return
+        if (code in _translateDownloading.value) return
+        _translateDownloading.value = _translateDownloading.value + code
+        refreshTranslatePacks()
+        translationEngine.downloadMlKitLanguage(
+            code,
+            onSuccess = {
+                _translateDownloading.value = _translateDownloading.value - code
+                refreshTranslatePacks()
+                checkCrossLingualStatus()
+                broadcastTranslationCapability()
+            },
+            onFailure = {
+                _translateDownloading.value = _translateDownloading.value - code
+                refreshTranslatePacks()
+            }
+        )
+    }
+
+    /** Deletes one language pack (ML Kit). English is shared and left alone. */
+    fun deleteTranslatePack(iso: String) {
+        val code = iso.lowercase()
+        viewModelScope.launch {
+            translationEngine.deleteMlKitLanguage(code)
+            refreshTranslatePacks()
+            checkCrossLingualStatus()
+            broadcastTranslationCapability()
+        }
+    }
+
+    /** Downloads every ML Kit language pack, one after another. */
+    fun downloadAllTranslatePacks() {
+        val pending = TranslationEngine.MLKIT_ISOS.filter { it != "en" }.toMutableList()
+        fun next() {
+            val code = pending.removeFirstOrNull() ?: run {
+                refreshTranslatePacks()
+                return
+            }
+            if (code in _translateDownloading.value) {
+                next()
+                return
+            }
+            _translateDownloading.value = _translateDownloading.value + code
+            refreshTranslatePacks()
+            translationEngine.downloadMlKitLanguage(
+                code,
+                onSuccess = {
+                    _translateDownloading.value = _translateDownloading.value - code
+                    next()
+                },
+                onFailure = {
+                    _translateDownloading.value = _translateDownloading.value - code
+                    next()
+                }
+            )
+        }
+        next()
+    }
+
     init {
         // Only mark installed if model actually exists on disk
         if (translationEngine.isInstalled()) {

@@ -89,6 +89,11 @@ fun SettingsScreen(
 
     val isTranslationInstalled by viewModel.isTranslationModelInstalled.collectAsState()
     val translationDownloadState by viewModel.translationDownloadState.collectAsState()
+    val translatePacks by viewModel.translatePacks.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refreshTranslatePacks()
+    }
     var testTranslationInput by remember { mutableStateOf("हम मलबे में दबे हैं") }
     var testTranslationOutput by remember { mutableStateOf("") }
 
@@ -570,6 +575,161 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Download translation model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // Per-language packs: download all, or only what you need.
+                // One pack unlocks its language against every other downloaded
+                // language, so a Hindi-only speaker downloads exactly Hindi.
+                // -------------------------------------------------------------
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Language packs (${translatePacks.count { it.installed }} of ${translatePacks.size} on device)",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                    OutlinedButton(
+                        onClick = { viewModel.downloadAllTranslatePacks() },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        SoftIcon(
+                            resId = R.drawable.ic_soft_download,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Translate all", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                translatePacks.forEach { pack ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.cardSecondaryBg)
+                            .padding(10.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = pack.displayName,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textPrimary
+                                    )
+                                    Text(
+                                        text = "${pack.backendLabel} · ${pack.sizeText}",
+                                        fontSize = 11.sp,
+                                        color = colors.textSecondary
+                                    )
+                                }
+                                SoftBadge(
+                                    text = when {
+                                        pack.pendingVerification -> "Queued"
+                                        pack.installed -> "On device"
+                                        pack.downloading -> "Fetching…"
+                                        else -> "Not fetched"
+                                    },
+                                    containerColor = when {
+                                        pack.pendingVerification -> colors.accentContainer
+                                        pack.installed -> colors.badgeMintContainer
+                                        pack.downloading -> colors.accentContainer
+                                        else -> colors.cardSecondaryBg
+                                    },
+                                    contentColor = when {
+                                        pack.pendingVerification -> colors.accent
+                                        pack.installed -> colors.badgeMintText
+                                        pack.downloading -> colors.accent
+                                        else -> colors.textSecondary
+                                    }
+                                )
+                            }
+                            Text(
+                                text = pack.detailText,
+                                fontSize = 11.sp,
+                                color = colors.textSecondary,
+                                lineHeight = 15.sp
+                            )
+                            if (pack.downloading) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(5.dp)
+                                        .clip(CircleShape),
+                                    color = colors.accent,
+                                    trackColor = colors.outline
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                when {
+                                    pack.pendingVerification -> {
+                                        OutlinedButton(
+                                            onClick = { },
+                                            enabled = false,
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Verification pending", fontSize = 11.sp)
+                                        }
+                                    }
+                                    pack.installed -> {
+                                        OutlinedButton(
+                                            onClick = { viewModel.deleteTranslatePack(pack.iso) },
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = colors.error
+                                            ),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp, colors.error.copy(alpha = 0.4f)
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Remove", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    pack.downloading -> {
+                                        Button(
+                                            onClick = { },
+                                            enabled = false,
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Fetching…", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                    else -> {
+                                        Button(
+                                            onClick = { viewModel.downloadTranslatePack(pack.iso) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = colors.accent,
+                                                contentColor = colors.onAccent
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        ) {
+                                            Text("Fetch pack", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

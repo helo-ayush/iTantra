@@ -35,36 +35,95 @@ class TranslationEngine(
     @Volatile
     private var mlKitDisabledUntilRedownload: Boolean = false
 
-    // Google ML Kit Neural Translators (safe against host JVM / no context)
-    private val hiToEnTranslator: Translator? by lazy {
-        try {
+    /**
+     * Fillers for the two languages ML Kit does not cover (Malayalam, Odia).
+     * Helsinki-NLP OPUS-MT bilingual packs, CC-BY licensed. Sizes are the
+     * upstream fp32 weights; the on-phone INT8-ONNX packs project to ~60-80MB
+     * each. Status stays [OpusPackStatus.PENDING_VERIFICATION] until the same
+     * per-direction quality protocol used for the other pairs passes — the UI
+     * shows them as identified-but-not-yet-downloadable.
+     */
+    enum class OpusPackStatus { PENDING_VERIFICATION, READY }
+
+    data class OpusPack(
+        val iso: String,
+        val direction: String,
+        val hfRepo: String,
+        val upstreamMb: Double,
+        val projectedOnPhoneMb: Double,
+        val status: OpusPackStatus = OpusPackStatus.PENDING_VERIFICATION
+    )
+
+    // Google ML Kit Neural Translators (safe against host JVM / no context).
+    // Translators are cached per direction; ML Kit itself stores one pack per
+    // language, so downloading pack X unlocks X against every other
+    // downloaded language — exactly the per-language economics the Settings
+    // screen exposes.
+    private val translatorCache = java.util.concurrent.ConcurrentHashMap<Pair<String, String>, Translator?>()
+
+    private fun translatorFor(fromIso: String, toIso: String): Translator? {
+        val key = fromIso to toIso
+        translatorCache[key]?.let { return it }
+        val src = mlKitLanguageCode(fromIso) ?: return null
+        val tgt = mlKitLanguageCode(toIso) ?: return null
+        val translator = try {
             val options = TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.HINDI)
-                .setTargetLanguage(TranslateLanguage.ENGLISH)
+                .setSourceLanguage(src)
+                .setTargetLanguage(tgt)
                 .build()
             Translation.getClient(options)
         } catch (t: Throwable) {
-            try { Log.w(TAG, "hiToEnTranslator init: ${t.message}") } catch (_: Throwable) {}
+            try { Log.w(TAG, "translatorFor($fromIso->$toIso) init: ${t.message}") } catch (_: Throwable) {}
             null
         }
+        if (translator != null) translatorCache[key] = translator
+        return translator
     }
 
-    private val enToHiTranslator: Translator? by lazy {
-        try {
-            val options = TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.HINDI)
-                .build()
-            Translation.getClient(options)
-        } catch (t: Throwable) {
-            try { Log.w(TAG, "enToHiTranslator init: ${t.message}") } catch (_: Throwable) {}
-            null
-        }
-    }
+    private val hiToEnTranslator: Translator? get() = translatorFor("hi", "en")
+    private val enToHiTranslator: Translator? get() = translatorFor("en", "hi")
 
     companion object {
         const val TAG = "TranslationEngine"
         const val MODEL_DIR_NAME = "nmt-hi-en"
+
+        /**
+         * ISO codes with a Google ML Kit on-device pack (verified against the
+         * official support list). A downloaded pack for language X unlocks
+         * X against every other downloaded language — per-language downloads
+         * are therefore the correct granularity, not per-pair.
+         */
+        val MLKIT_ISOS: Set<String> = setOf("en", "hi", "bn", "gu", "kn", "mr", "ta", "te")
+
+        /** Approximate on-device size of one ML Kit language pack. */
+        const val MLKIT_PACK_MB = 30.0
+
+        /**
+         * Best-identified fillers for Malayalam and Odia (ML Kit covers
+         * neither): OPUS-MT bilingual packs. Served as information for the
+         * Settings screen; downloads unlock only after quality verification.
+         */
+        val OPUS_FILLERS: List<OpusPack> = listOf(
+            OpusPack("ml", "en->ml", "Helsinki-NLP/opus-mt-en-ml", 229.0, 65.0),
+            OpusPack("ml", "ml->en", "Helsinki-NLP/opus-mt-ml-en", 308.0, 80.0),
+            OpusPack("or", "en->or", "Helsinki-NLP/opus-mt-mul-en", 310.0, 80.0),
+            OpusPack("or", "or->en", "Helsinki-NLP/opus-mt-en-mul", 310.0, 80.0)
+        )
+
+        /**
+         * Resolves an ISO code to an ML Kit language tag, or null when ML Kit
+         * has no pack for it (currently ml, or). Uses tag lookup so support
+         * follows the installed Play Services version instead of hardcoded
+         * constants.
+         */
+        fun mlKitLanguageCode(iso: String): String? {
+            if (iso.lowercase(java.util.Locale.ROOT) !in MLKIT_ISOS) return null
+            return try {
+                TranslateLanguage.fromLanguageTag(iso.lowercase(java.util.Locale.ROOT))
+            } catch (_: Throwable) {
+                null
+            }
+        }
 
         // Canonical emergency phrase map (Hindi -> English)
         private val HINDI_TO_ENGLISH_PHRASES = linkedMapOf(
@@ -484,11 +543,9 @@ class TranslationEngine(
         // failed native load cannot run in a hot loop and OOM-kill the process.
         if (!mlKitDisabledUntilRedownload) {
             try {
-                val translator = when {
-                    from == "hi" && to == "en" -> hiToEnTranslator
-                    from == "en" && to == "hi" -> enToHiTranslator
-                    else -> null
-                }
+                val translator =
+                    if (from in MLKIT_ISOS && to in MLKIT_ISOS) translatorFor(from, to)
+                    else null
                 if (translator != null) {
                     val task = translator.translate(trimmed)
                     val isMainThread = try {
@@ -553,10 +610,98 @@ class TranslationEngine(
 
     private fun normalizeIso(iso: String): String {
         val lower = iso.lowercase(Locale.ROOT)
-        return when {
-            lower.startsWith("hi") -> "hi"
-            lower.startsWith("en") -> "en"
-            else -> lower
+        for (code in MLKIT_ISOS + setOf("ml", "or")) {
+            if (lower.startsWith(code)) return code
+        }
+        return lower
+    }
+
+    /**
+     * Downloads the ML Kit language pack for [iso] (e.g. "hi"). One pack
+     * unlocks that language against every other downloaded language, in both
+     * directions. No-op with failure when ML Kit has no pack for the code.
+     */
+    fun downloadMlKitLanguage(
+        iso: String,
+        onSuccess: () -> Unit = {},
+        onFailure: (Exception) -> Unit = {}
+    ) {
+        val code = normalizeIso(iso)
+        if (code !in MLKIT_ISOS || code == "en") {
+            // English ships inside every translator; "downloading English"
+            // means ensuring at least one translator exists instead.
+            if (code == "en") {
+                onSuccess()
+                return
+            }
+            onFailure(IllegalStateException("No ML Kit pack for '$iso' (covered: ${MLKIT_ISOS.sorted().joinToString()})"))
+            return
+        }
+        try {
+            // A translator for code<->en pulls both packs; en is shared, so
+            // this call effectively installs exactly the missing pack.
+            val translator = translatorFor(code, "en")
+                ?: run {
+                    onFailure(IllegalStateException("ML Kit translator unavailable for '$code'"))
+                    return
+                }
+            translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                .addOnSuccessListener {
+                    mlKitDisabledUntilRedownload = false
+                    try { Log.i(TAG, "ML Kit pack ready: $code") } catch (_: Throwable) {}
+                    onSuccess()
+                }
+                .addOnFailureListener { onFailure(it as? Exception ?: IllegalStateException(it.message)) }
+        } catch (e: Exception) {
+            onFailure(e)
+        }
+    }
+
+    /**
+     * Deletes the ML Kit language pack for [iso]. Shared packs (English) are
+     * left alone — deleting them would break every other downloaded language.
+     */
+    fun deleteMlKitLanguage(iso: String, onComplete: () -> Unit = {}) {
+        val code = normalizeIso(iso)
+        if (code !in MLKIT_ISOS || code == "en") {
+            onComplete()
+            return
+        }
+        try {
+            val modelManager = RemoteModelManager.getInstance()
+            val langTag = mlKitLanguageCode(code) ?: run {
+                onComplete()
+                return
+            }
+            modelManager.deleteDownloadedModel(TranslateRemoteModel.Builder(langTag).build())
+                .addOnCompleteListener { onComplete() }
+        } catch (_: Throwable) {
+            onComplete()
+        }
+    }
+
+    /**
+     * Returns the set of ISO codes whose ML Kit packs are on disk
+     * (English is reported when any translator pack exists, since it ships
+     * shared with every download).
+     */
+    fun mlKitDownloadedIsos(callback: (Set<String>) -> Unit) {
+        try {
+            RemoteModelManager.getInstance()
+                .getDownloadedModels(TranslateRemoteModel::class.java)
+                .addOnSuccessListener { models ->
+                    val found = models.mapNotNullTo(mutableSetOf()) { m ->
+                        MLKIT_ISOS.firstOrNull { code ->
+                            m.language.equals(code, ignoreCase = true) ||
+                                m.language.startsWith(code, ignoreCase = true)
+                        }
+                    }
+                    if (found.isNotEmpty()) found.add("en")
+                    callback(found)
+                }
+                .addOnFailureListener { callback(emptySet()) }
+        } catch (_: Throwable) {
+            callback(emptySet())
         }
     }
 

@@ -1670,7 +1670,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             msgType = PacketFraming.MSG_TYPE_VOICE_LINK_REQUEST,
             payload = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN)
                 .putLong(victim.nodeId)
-                .put(if (translationEngine.isInstalled()) 1.toByte() else 0.toByte())
+                .put(if (translationEngine.anyTranslatorInstalled()) 1.toByte() else 0.toByte())
                 .array()
         )
         if (_wifiDirectEnabled.value) {
@@ -2929,7 +2929,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                         msgType = PacketFraming.MSG_TYPE_VOICE_LINK_ACK,
                         payload = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN)
                             .putLong(packet.nodeId)
-                            .put(if (translationEngine.isInstalled()) 1.toByte() else 0.toByte())
+                            .put(if (translationEngine.anyTranslatorInstalled()) 1.toByte() else 0.toByte())
                             .array()
                     )
                     broadcastMeshPacket(PacketFraming.encode(ackPacket), packet.nodeId, forceUdp = true)
@@ -3536,10 +3536,16 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             var origTextToInclude: String? = null
 
             if (isCrossLingual && localHasTranslator) {
-                val translated = translationEngine.translate(cleanText, langCode, peerLang)
-                logVoice("translate", "outbound cross-lingual: '$cleanText' ($langCode) -> '$translated' ($peerLang)")
+                // English-pivot rule: cross-lingual speech is ALWAYS converted
+                // to English before sending; the receiver converts English to
+                // its own language. Each side therefore needs only its own
+                // language pack, and no pair matrix is ever negotiated.
+                val translated = translationEngine.translate(cleanText, langCode, "en")
+                logVoice("translate", "outbound cross-lingual: '$cleanText' ($langCode) -> '$translated' (en)")
                 textToSend = translated
-                targetLangCode = peerLang
+                // Honest tagging: claim English only when the text actually
+                // changed; otherwise the receiver would TTS the wrong voice.
+                targetLangCode = if (translated == cleanText) langCode else "en"
                 origTextToInclude = cleanText
             }
 
@@ -3617,9 +3623,11 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         var origTextToInclude: String? = null
 
         if (isCrossLingual && localHasTranslator) {
-            val translated = translationEngine.translate(trimmed, langCode, peerLang)
+            // English-pivot rule (see flushVoiceTurn): receivers convert from
+            // English, so cross-lingual speech always leaves as English.
+            val translated = translationEngine.translate(trimmed, langCode, "en")
             textToSend = translated
-            targetLangCode = peerLang
+            targetLangCode = if (translated == trimmed) langCode else "en"
             origTextToInclude = trimmed
         }
 

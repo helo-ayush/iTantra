@@ -374,9 +374,12 @@ fun SettingsScreen(
 
                 HorizontalDivider(color = colors.outline, thickness = 1.dp)
 
-                // Model pack list
+                // Model pack list (each card carries its own translator row,
+                // except English which needs none).
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     modelPacks.forEach { pack ->
+                        val iso = pack.iso.lowercase()
+                        val tp = translatePacks.firstOrNull { it.iso.equals(iso, ignoreCase = true) }
                         LanguagePackRow(
                             pack = pack,
                             colors = colors,
@@ -384,7 +387,10 @@ fun SettingsScreen(
                             onPauseDownload = { viewModel.pauseModelDownload(pack.languageTag) },
                             onResumeDownload = { viewModel.downloadModel(pack.languageTag) },
                             onCancelDownload = { viewModel.cancelModelDownload(pack.languageTag) },
-                            onDeleteClick = { modelToDelete = pack }
+                            onDeleteClick = { modelToDelete = pack },
+                            translatePack = if (iso == "en") null else tp,
+                            onDownloadTranslate = { viewModel.downloadTranslatePack(iso) },
+                            onDeleteTranslate = { viewModel.deleteTranslatePack(iso) }
                         )
                     }
                 }
@@ -431,7 +437,7 @@ fun SettingsScreen(
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Cross-lingual mesh (Hindi ⟷ English)",
+                            text = "Cross-lingual mesh (via English)",
                             fontSize = 12.sp,
                             color = colors.textSecondary
                         )
@@ -471,7 +477,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Model: Google ML Kit Neural NMT (hi ↔ en)",
+                                text = "How it works: English pivot",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textPrimary
@@ -484,7 +490,7 @@ fun SettingsScreen(
                             )
                         }
                         Text(
-                            text = "Powered by Google ML Kit on-device neural machine translation. Translates full sentences offline between Hindi and English. If neither device has this pack installed, cross-lingual voice turns will pause with a prompt.",
+                            text = "Your speech is converted to English before sending; the other phone converts English into its own language. Each phone needs only its own language translator (below, on its language card) — no pair setup, ever. Same-language chats translate nothing. If either side is missing its pack, cross-lingual voice turns pause with a prompt.",
                             fontSize = 12.sp,
                             color = colors.textSecondary,
                             lineHeight = 16.sp
@@ -523,234 +529,11 @@ fun SettingsScreen(
                     }
                 }
 
-                // Action Button Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isTranslationInstalled) {
-                        OutlinedButton(
-                            onClick = { viewModel.deleteTranslationModel() },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = colors.error
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, colors.error.copy(alpha = 0.4f)),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            SoftIcon(
-                                resId = R.drawable.ic_soft_trash,
-                                contentDescription = null,
-                                tint = colors.error,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Remove model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    } else if (translationDownloadState is ModelDownloadState.Downloading) {
-                        Button(
-                            onClick = { },
-                            enabled = false,
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Text("Downloading…", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    } else {
-                        Button(
-                            onClick = { viewModel.downloadTranslationModel() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.accent,
-                                contentColor = colors.onAccent
-                            ),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            SoftIcon(
-                                resId = R.drawable.ic_soft_download,
-                                contentDescription = null,
-                                tint = colors.onAccent,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Download translation model", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
-                // -------------------------------------------------------------
-                // Per-language packs: download all, or only what you need.
-                // One pack unlocks its language against every other downloaded
-                // language, so a Hindi-only speaker downloads exactly Hindi.
-                // -------------------------------------------------------------
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Language packs (${translatePacks.count { it.installed }} of ${translatePacks.size} on device)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textPrimary
-                    )
-                    OutlinedButton(
-                        onClick = { viewModel.downloadAllTranslatePacks() },
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        SoftIcon(
-                            resId = R.drawable.ic_soft_download,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Translate all", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-
-                translatePacks.forEach { pack ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.cardSecondaryBg)
-                            .padding(10.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = pack.displayName,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = colors.textPrimary
-                                    )
-                                    Text(
-                                        text = "${pack.backendLabel} · ${pack.sizeText}",
-                                        fontSize = 11.sp,
-                                        color = colors.textSecondary
-                                    )
-                                }
-                                SoftBadge(
-                                    text = when {
-                                        pack.pendingVerification -> "Queued"
-                                        pack.installed -> "On device"
-                                        pack.downloading -> "Fetching…"
-                                        else -> "Not fetched"
-                                    },
-                                    containerColor = when {
-                                        pack.pendingVerification -> colors.accentContainer
-                                        pack.installed -> colors.badgeMintContainer
-                                        pack.downloading -> colors.accentContainer
-                                        else -> colors.cardSecondaryBg
-                                    },
-                                    contentColor = when {
-                                        pack.pendingVerification -> colors.accent
-                                        pack.installed -> colors.badgeMintText
-                                        pack.downloading -> colors.accent
-                                        else -> colors.textSecondary
-                                    }
-                                )
-                            }
-                            Text(
-                                text = pack.detailText,
-                                fontSize = 11.sp,
-                                color = colors.textSecondary,
-                                lineHeight = 15.sp
-                            )
-                            if (pack.downloading) {
-                                if (pack.downloadProgress != null) {
-                                    LinearProgressIndicator(
-                                        progress = { pack.downloadProgress },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(5.dp)
-                                            .clip(CircleShape),
-                                        color = colors.accent,
-                                        trackColor = colors.outline
-                                    )
-                                    Text(
-                                        text = "${(pack.downloadProgress * 100).toInt()}% of ${pack.sizeText}",
-                                        fontSize = 10.sp,
-                                        color = colors.accent
-                                    )
-                                } else {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(5.dp)
-                                            .clip(CircleShape),
-                                        color = colors.accent,
-                                        trackColor = colors.outline
-                                    )
-                                }
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                when {
-                                    pack.pendingVerification -> {
-                                        OutlinedButton(
-                                            onClick = { },
-                                            enabled = false,
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text("Verification pending", fontSize = 11.sp)
-                                        }
-                                    }
-                                    pack.installed -> {
-                                        OutlinedButton(
-                                            onClick = { viewModel.deleteTranslatePack(pack.iso) },
-                                            colors = ButtonDefaults.outlinedButtonColors(
-                                                contentColor = colors.error
-                                            ),
-                                            border = androidx.compose.foundation.BorderStroke(
-                                                1.dp, colors.error.copy(alpha = 0.4f)
-                                            ),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text("Remove", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                    pack.downloading -> {
-                                        Button(
-                                            onClick = { },
-                                            enabled = false,
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text("Fetching…", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                    else -> {
-                                        Button(
-                                            onClick = { viewModel.downloadTranslatePack(pack.iso) },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = colors.accent,
-                                                contentColor = colors.onAccent
-                                            ),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                        ) {
-                                            Text("Fetch pack", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
+                Text(
+                    text = "Translators live on each language card above — fetch exactly the languages you speak with. ${translatePacks.count { it.installed }} of ${translatePacks.size} on this device.",
+                    fontSize = 12.sp,
+                    color = colors.textSecondary
+                )
                 HorizontalDivider(color = colors.outline, thickness = 1.dp)
 
                 // -------------------------------------------------------------
@@ -1533,7 +1316,10 @@ private fun LanguagePackRow(
     onPauseDownload: () -> Unit,
     onResumeDownload: () -> Unit,
     onCancelDownload: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    translatePack: com.itantra.app.viewmodel.MissionControlViewModel.TranslatePackUiState? = null,
+    onDownloadTranslate: () -> Unit = {},
+    onDeleteTranslate: () -> Unit = {}
 ) {
     val state = pack.downloadState
 
@@ -1709,6 +1495,81 @@ private fun LanguagePackRow(
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text("Download", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            // Translator sub-row: this language <-> English pack lives and dies
+            // with the language card (English itself needs none, so it gets no
+            // row). Lets a Hindi-only speaker fetch exactly one translator.
+            if (translatePack != null) {
+                HorizontalDivider(color = colors.outline, thickness = 0.5.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "English translator",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            text = when {
+                                translatePack.pendingVerification ->
+                                    "${translatePack.backendLabel} · ${translatePack.sizeText}"
+                                translatePack.installed ->
+                                    "On device · ${translatePack.sizeText} · translates both ways via English"
+                                translatePack.downloading ->
+                                    "Fetching translator…"
+                                else ->
+                                    "${translatePack.backendLabel} · ${translatePack.sizeText}"
+                            },
+                            fontSize = 10.sp,
+                            color = colors.textSecondary
+                        )
+                    }
+                    when {
+                        translatePack.pendingVerification -> OutlinedButton(
+                            onClick = { },
+                            enabled = false,
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("Queued", fontSize = 11.sp)
+                        }
+                        translatePack.installed -> OutlinedButton(
+                            onClick = onDeleteTranslate,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.error),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp, colors.error.copy(alpha = 0.4f)
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("Remove", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        translatePack.downloading -> Button(
+                            onClick = { },
+                            enabled = false,
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("Fetching…", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        else -> Button(
+                            onClick = onDownloadTranslate,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = colors.onAccent
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("Fetch translator", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }

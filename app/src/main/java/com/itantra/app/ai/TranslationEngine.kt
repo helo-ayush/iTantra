@@ -691,6 +691,21 @@ class TranslationEngine(
      * pivot pack (`nmt-ml` / `nmt-or`) for Malayalam / Odia. English itself
      * needs nothing (it ships shared / is the pivot).
      */
+    /**
+     * True when this device can translate at all (any ML Kit pack, any OPUS
+     * pivot pack, or the legacy bundle). Reported to peers so they know
+     * cross-lingual conversation is possible with us.
+     */
+    fun anyTranslatorInstalled(): Boolean {
+        if (isInstalled()) return true
+        if (mlKitReadyIsos.isNotEmpty()) return true
+        return try {
+            isOpusPackInstalled("ml") || isOpusPackInstalled("or")
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     fun canTranslate(fromIso: String, toIso: String): Boolean {
         val ready = mlKitReadyIsos
         val nmt = setOf("nmt-ml", "nmt-or").filter { tag ->

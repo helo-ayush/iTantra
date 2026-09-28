@@ -65,6 +65,52 @@ object ModelCatalogue {
     const val DOWNLOAD_BASE_URL =
         "https://huggingface.co/helo-ayush/itantra-models/resolve/main/"
 
+    const val NMT_CATALOGUE_URL =
+        "https://huggingface.co/helo-ayush/itantra-models/raw/main/nmt-catalogue.json"
+
+    /**
+     * Fetches `nmt-catalogue.json` (OPUS pivot translator packs). Same entry
+     * shape as the STT catalogue, separate file so translation packs never
+     * pollute the speech-model list. Empty on any failure.
+     */
+    suspend fun fetchRemoteNmtCatalogue(): List<CatalogueLanguage> = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(NMT_CATALOGUE_URL).openConnection() as HttpURLConnection
+            try {
+                connection.requestMethod = "GET"
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                connection.readTimeout = READ_TIMEOUT_MS
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("Accept", "application/json")
+                connection.setRequestProperty("User-Agent", USER_AGENT)
+                if (connection.responseCode !in 200..299) return@withContext emptyList()
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                val packs = JSONObject(body).getJSONArray("packs")
+                val result = ArrayList<CatalogueLanguage>(packs.length())
+                for (i in 0 until packs.length()) {
+                    val entry = packs.getJSONObject(i)
+                    result += CatalogueLanguage(
+                        languageTag = entry.getString("languageTag"),
+                        name = entry.getString("name"),
+                        script = entry.getString("script"),
+                        iso = entry.getString("iso"),
+                        archive = entry.getString("archive"),
+                        sizeBytes = entry.getLong("sizeBytes"),
+                        sizeMb = entry.optDouble("sizeMB", entry.optDouble("sizeMb", 0.0)),
+                        sha256 = entry.getString("sha256"),
+                        tested = entry.optBoolean("tested", false),
+                        published = entry.optBoolean("published", true)
+                    )
+                }
+                result
+            } finally {
+                connection.disconnect()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     val translationModel = CatalogueTranslationModel()
 
     private const val CONNECT_TIMEOUT_MS = 10_000

@@ -342,61 +342,114 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         val sizeText: String,
         val installed: Boolean,
         val downloading: Boolean,
+        val downloadProgress: Float?,
         val pendingVerification: Boolean
     )
+
+    private val _nmtCatalogue = MutableStateFlow<List<CatalogueLanguage>>(emptyList())
+
+    private fun nmtTagFor(iso: String) = "nmt-$iso"
+
+    /** Live hub progress (0..1) for an NMT pack download, if any. */
+    private fun nmtDownloadProgress(tag: String): Float? {
+        val state = modelDownloadManager.states.value[tag] ?: return null
+        return (state as? ModelDownloadState.Downloading)?.progress
+    }
 
     private val _translatePacks = MutableStateFlow<List<TranslatePackUiState>>(emptyList())
     val translatePacks: StateFlow<List<TranslatePackUiState>> = _translatePacks.asStateFlow()
 
     private val _translateDownloading = MutableStateFlow<Set<String>>(emptySet())
 
-    /** Rebuilds the per-language translate list from on-disk ML Kit state. */
+    /** Rebuilds the per-language translate list from on-disk state + hub catalogue. */
     fun refreshTranslatePacks() {
-        translationEngine.mlKitDownloadedIsos { downloaded ->
-            val rows = SupportedLanguage.values().map { lang ->
-                val iso = lang.code
-                if (iso in TranslationEngine.MLKIT_ISOS) {
-                    TranslatePackUiState(
-                        iso = iso,
-                        displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
-                        backendLabel = "Google ML Kit · on-device",
-                        detailText = "One ${lang.englishName.lowercase()} pack unlocks it against every other " +
-                            "downloaded language, both directions. ~30MB: compact distilled translators.",
-                        sizeText = "≈30 MB",
-                        installed = iso in downloaded,
-                        downloading = iso in _translateDownloading.value,
-                        pendingVerification = false
-                    )
-                } else {
-                    val fillers = TranslationEngine.OPUS_FILLERS.filter { it.iso == iso }
-                    TranslatePackUiState(
-                        iso = iso,
-                        displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
-                        backendLabel = "OPUS-MT bilingual (Helsinki) · pending verification",
-                        detailText = "ML Kit ships no ${lang.englishName.lowercase()} pack. Identified fillers: " +
-                            fillers.joinToString { "${it.direction} (${it.hfRepo.substringAfter("/")})" } +
-                            ". Upstream research weights → ~60–80MB on-phone INT8 each after conversion. " +
-                            "Downloads unlock after the per-direction quality protocol passes.",
-                        sizeText = "~70 MB × 2 (projected)",
-                        installed = false,
-                        downloading = false,
-                        pendingVerification = true
-                    )
+        viewModelScope.launch {
+            val nmtEntries = ModelCatalogue.fetchRemoteNmtCatalogue()
+            if (nmtEntries.isNotEmpty()) _nmtCatalogue.value = nmtEntries
+            translationEngine.mlKitDownloadedIsos { downloaded ->
+                val rows = SupportedLanguage.values().map { lang ->
+                    val iso = lang.code
+                    if (iso in TranslationEngine.MLKIT_ISOS) {
+                        TranslatePackUiState(
+                            iso = iso,
+                            displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
+                            backendLabel = "Google ML Kit · on-device",
+                            detailText = "One ${lang.englishName.lowercase()} pack unlocks it against every other " +
+                                "downloaded language, both directions. ~30MB: compact distilled translators.",
+                            sizeText = "≈30 MB",
+                            installed = iso in downloaded,
+                            downloading = iso in _translateDownloading.value,
+                            downloadProgress = null,
+                            pendingVerification = false
+                        )
+                    } else {
+                        val tag = nmtTagFor(iso)
+                        val entry = _nmtCatalogue.value.firstOrNull { it.languageTag == tag }
+                        val installed = modelStorageManager.isInstalled(tag)
+                        val progress = nmtDownloadProgress(tag)
+                        val fillers = TranslationEngine.OPUS_FILLERS.filter { it.iso == iso }
+                        val beta = iso == "or"
+                        TranslatePackUiState(
+                            iso = iso,
+                            displayName = lang.englishName.lowercase().replaceFirstChar { it.uppercase() },
+                            backendLabel = "OPUS-MT INT8-ONNX (Helsinki, CC-BY)" +
+                                if (beta) " · beta" else " · verified",
+                            detailText = if (entry != null) {
+                                "Pivot pair ${entry.archive} (${"%.0f".format(entry.sizeMb)} MB: two directions, " +
+                                    "INT8-quantized, quality protocol passed" +
+                                    (if (beta) " on key phrases" else "") + "). " +
+                                    fillers.joinToString { "${it.direction} ← ${it.hfRepo.substringAfter("/")}" } + "."
+                            } else {
+                                "ML Kit ships no ${lang.englishName.lowercase()} pack. Identified fillers: " +
+                                    fillers.joinToString { "${it.direction} (${it.hfRepo.substringAfter("/")})" } +
+                                    ". Waiting on catalogue."
+                            },
+                            sizeText = if (entry != null) "≈${"%.0f".format(entry.sizeMb)} MB" else "TBD",
+                            installed = installed,
+                            downloading = progress != null,
+                            downloadProgress = progress,
+                            pendingVerification = entry == null
+                        )
+                    }
                 }
-            }
-            _translatePacks.value = rows
-            val anyInstalled = rows.any { it.installed }
-            _isTranslationModelInstalled.value = anyInstalled || translationEngine.isInstalled()
-            if (anyInstalled && _translationDownloadState.value !is ModelDownloadState.Downloading) {
-                _translationDownloadState.value = ModelDownloadState.Installed
+                _translatePacks.value = rows
+                val anyInstalled = rows.any { it.installed }
+                _isTranslationModelInstalled.value = anyInstalled || translationEngine.isInstalled()
+                if (anyInstalled && _translationDownloadState.value !is ModelDownloadState.Downloading) {
+                    _translationDownloadState.value = ModelDownloadState.Installed
+                }
             }
         }
     }
 
-    /** Downloads one language pack (ML Kit). No-op for pending-verification rows. */
+    /** Hub download states (NMT packs report progress here). */
+    val hubDownloadStates: StateFlow<Map<String, ModelDownloadState>> = modelDownloadManager.states
+
+    private var nmtProgressSyncStarted = false
+
+    /** Single collector mirroring hub progress into the translate rows. */
+    private fun startNmtProgressSync() {
+        if (nmtProgressSyncStarted) return
+        nmtProgressSyncStarted = true
+        viewModelScope.launch {
+            modelDownloadManager.states.collect { refreshTranslatePacks() }
+        }
+    }
+
+    /**
+     * Downloads one language pack: ML Kit packs natively, ml/or pivot packs
+     * through the model hub from nmt-catalogue.json. No-op while the hub has
+     * no published entry for the language.
+     */
     fun downloadTranslatePack(iso: String) {
         val code = iso.lowercase()
-        if (code !in TranslationEngine.MLKIT_ISOS) return
+        if (code !in TranslationEngine.MLKIT_ISOS) {
+            val entry = _nmtCatalogue.value.firstOrNull { it.languageTag == nmtTagFor(code) } ?: return
+            if (modelStorageManager.isInstalled(entry.languageTag)) return
+            startNmtProgressSync()
+            modelDownloadManager.download(entry)
+            return
+        }
         if (code in _translateDownloading.value) return
         _translateDownloading.value = _translateDownloading.value + code
         refreshTranslatePacks()
@@ -415,9 +468,18 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         )
     }
 
-    /** Deletes one language pack (ML Kit). English is shared and left alone. */
+    /** Deletes one language pack (ML Kit, or an NMT hub pack). English is shared and left alone. */
     fun deleteTranslatePack(iso: String) {
         val code = iso.lowercase()
+        if (code !in TranslationEngine.MLKIT_ISOS) {
+            viewModelScope.launch {
+                deleteModel(nmtTagFor(code))
+                refreshTranslatePacks()
+                checkCrossLingualStatus()
+                broadcastTranslationCapability()
+            }
+            return
+        }
         viewModelScope.launch {
             translationEngine.deleteMlKitLanguage(code)
             refreshTranslatePacks()

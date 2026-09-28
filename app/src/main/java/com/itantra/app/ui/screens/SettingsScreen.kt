@@ -666,14 +666,31 @@ fun SettingsScreen(
                                 lineHeight = 15.sp
                             )
                             if (pack.downloading) {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(5.dp)
-                                        .clip(CircleShape),
-                                    color = colors.accent,
-                                    trackColor = colors.outline
-                                )
+                                if (pack.downloadProgress != null) {
+                                    LinearProgressIndicator(
+                                        progress = { pack.downloadProgress },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(5.dp)
+                                            .clip(CircleShape),
+                                        color = colors.accent,
+                                        trackColor = colors.outline
+                                    )
+                                    Text(
+                                        text = "${(pack.downloadProgress * 100).toInt()}% of ${pack.sizeText}",
+                                        fontSize = 10.sp,
+                                        color = colors.accent
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(5.dp)
+                                            .clip(CircleShape),
+                                        color = colors.accent,
+                                        trackColor = colors.outline
+                                    )
+                                }
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

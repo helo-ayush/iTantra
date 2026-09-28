@@ -628,7 +628,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _activePeerLanguage.value = peerLang
 
         if (peerNodeId != null && peerLang != null && !peerLang.equals(localLang, ignoreCase = true)) {
-            val localHasTranslator = translationEngine.isInstalled()
+            // Pair-aware: same-language links never needed translation at
+            // all; cross-lingual links need a covering pack on either side
+            // (our ML Kit / OPUS packs, or the peer's reported translator).
+            val localHasTranslator = translationEngine.canTranslate(localLang, peerLang)
             val peerHasTranslator = peerTranslatorAvailable[peerNodeId] == true
             if (!localHasTranslator && !peerHasTranslator) {
                 _isCrossLingualBlocked.value = true
@@ -2679,7 +2682,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 var uiDisplayText = mainText
 
                 // Inbound translation if incoming text is in peer's language and local translator is installed
-                if (!incomingLangCode.equals(localLang, ignoreCase = true) && translationEngine.isInstalled()) {
+                if (!incomingLangCode.equals(localLang, ignoreCase = true) &&
+                    (translationEngine.isInstalled() ||
+                        translationEngine.canTranslate(incomingLangCode, localLang))
+                ) {
                     val localTranslated = translationEngine.translate(mainText, incomingLangCode, localLang)
                     logVoice("translate", "inbound cross-lingual: '$mainText' ($incomingLangCode) -> '$localTranslated' ($localLang)")
                     textToSpeak = localTranslated
@@ -3461,7 +3467,11 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
             val peerLang = _activePeerLanguage.value
             val isCrossLingual = peerLang != null && !peerLang.equals(langCode, ignoreCase = true)
-            val localHasTranslator = translationEngine.isInstalled()
+            // Legacy global flag OR pair-aware coverage (ML Kit packs / OPUS
+            // pivot packs). translate() itself still degrades gracefully, so
+            // attempting whenever either signal says yes can only help.
+            val localHasTranslator = translationEngine.isInstalled() ||
+                (peerLang != null && translationEngine.canTranslate(langCode, peerLang))
 
             var textToSend = cleanText
             var targetLangCode = langCode
@@ -3541,7 +3551,8 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
         val peerLang = _activePeerLanguage.value
         val isCrossLingual = peerLang != null && !peerLang.equals(langCode, ignoreCase = true)
-        val localHasTranslator = translationEngine.isInstalled()
+        val localHasTranslator = translationEngine.isInstalled() ||
+            (peerLang != null && translationEngine.canTranslate(langCode, peerLang))
 
         var textToSend = trimmed
         var targetLangCode = langCode

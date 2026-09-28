@@ -31,6 +31,19 @@ class TranslationEngine(
     @Volatile
     private var mlKitModelsReady: Boolean = false
 
+    /**
+     * Snapshot of ML Kit ISOs with packs on disk. Refreshed on every
+     * download/delete/status query; drives pair-aware gating without blocking.
+     */
+    @Volatile
+    var mlKitReadyIsos: Set<String> = emptySet()
+        private set
+
+    private val opusEngine: OpusTranslatorEngine? by lazy {
+        val ctx = context ?: return@lazy null
+        runCatching { OpusTranslatorEngine(ctx) }.getOrNull()
+    }
+
     /** Latch that disables ML Kit after a corrupt or partial model is detected. */
     @Volatile
     private var mlKitDisabledUntilRedownload: Boolean = false
@@ -124,6 +137,33 @@ class TranslationEngine(
                 null
             }
         }
+
+        fun normalizeIsoStatic(iso: String): String {
+            val lower = iso.lowercase(java.util.Locale.ROOT)
+            for (code in MLKIT_ISOS + setOf("ml", "or")) {
+                if (lower.startsWith(code)) return code
+            }
+            return lower
+        }
+
+        fun canTranslatePair(
+            fromIso: String,
+            toIso: String,
+            mlKitReady: Set<String>,
+            nmtInstalledTags: Set<String>
+        ): Boolean {
+            val from = normalizeIsoStatic(fromIso)
+            val to = normalizeIsoStatic(toIso)
+            if (from == to) return true
+            for (side in setOf(from, to)) {
+                if (side == "en") continue
+                val covered = if (side in MLKIT_ISOS) side in mlKitReady
+                else "nmt-$side" in nmtInstalledTags
+                if (!covered) return false
+            }
+            return true
+        }
+    }
 
         // Canonical emergency phrase map (Hindi -> English)
         private val HINDI_TO_ENGLISH_PHRASES = linkedMapOf(
@@ -404,7 +444,6 @@ class TranslationEngine(
             "hello" to "नमस्ते",
             "hi" to "नमस्ते"
         )
-    }
 
     /**
      * Downloads Google ML Kit Hindi and English on-device models.
@@ -593,7 +632,16 @@ class TranslationEngine(
             }
         }
 
-        // 2. Deterministic offline dictionary fallback
+        // 2. OPUS pivot leg for Malayalam / Odia (hub packs, INT8-ONNX).
+        if ((from == "ml" || to == "ml" || from == "or" || to == "or") && from != to) {
+            try {
+                opusTranslate(trimmed, from, to)?.let { return it }
+            } catch (t: Throwable) {
+                try { Log.w(TAG, "OPUS leg failed for '$trimmed': ${t.message}") } catch (_: Throwable) {}
+            }
+        }
+
+        // 3. Deterministic offline dictionary fallback
         return try {
             when {
                 from == "hi" && to == "en" -> translateHindiToEnglish(trimmed)
@@ -608,12 +656,51 @@ class TranslationEngine(
         }
     }
 
-    private fun normalizeIso(iso: String): String {
-        val lower = iso.lowercase(Locale.ROOT)
-        for (code in MLKIT_ISOS + setOf("ml", "or")) {
-            if (lower.startsWith(code)) return code
+    /** OPUS pack tag covering [iso] (ml/or only, null otherwise). */
+    private fun opusPackFor(iso: String): String? = when (normalizeIso(iso)) {
+        "ml" -> "nmt-ml"
+        "or" -> "nmt-or"
+        else -> null
+    }
+
+    private fun isOpusPackInstalled(iso: String): Boolean {
+        val tag = opusPackFor(iso) ?: return false
+        return try {
+            storageManager?.isInstalled(tag) == true ||
+                opusEngine?.isPackInstalled(tag) == true
+        } catch (_: Throwable) {
+            false
         }
-        return lower
+    }
+
+    private fun opusTranslate(text: String, from: String, to: String): String? {
+        val packTag = opusPackFor(from) ?: opusPackFor(to) ?: return null
+        if (!isOpusPackInstalled(from) && !isOpusPackInstalled(to)) return null
+        val engine = opusEngine ?: return null
+        // Pivot packs store both directions; the manifest key is "$from-$to".
+        return engine.translate(text, packTag, "$from-$to")
+    }
+
+    private fun normalizeIso(iso: String): String = normalizeIsoStatic(iso)
+
+    /**
+     * Pair-aware translatability (pure policy, host-testable).
+     *
+     * Same language is always a passthrough. Otherwise every non-English
+     * side must be covered: an ML Kit pack for ML Kit languages, the OPUS
+     * pivot pack (`nmt-ml` / `nmt-or`) for Malayalam / Odia. English itself
+     * needs nothing (it ships shared / is the pivot).
+     */
+    fun canTranslate(fromIso: String, toIso: String): Boolean {
+        val ready = mlKitReadyIsos
+        val nmt = setOf("nmt-ml", "nmt-or").filter { tag ->
+            try {
+                storageManager?.isInstalled(tag) == true || opusEngine?.isPackInstalled(tag) == true
+            } catch (_: Throwable) {
+                false
+            }
+        }.toSet()
+        return canTranslatePair(fromIso, toIso, ready, nmt)
     }
 
     /**
@@ -648,6 +735,7 @@ class TranslationEngine(
             translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
                 .addOnSuccessListener {
                     mlKitDisabledUntilRedownload = false
+                    mlKitReadyIsos = mlKitReadyIsos + code + "en"
                     try { Log.i(TAG, "ML Kit pack ready: $code") } catch (_: Throwable) {}
                     onSuccess()
                 }
@@ -674,7 +762,10 @@ class TranslationEngine(
                 return
             }
             modelManager.deleteDownloadedModel(TranslateRemoteModel.Builder(langTag).build())
-                .addOnCompleteListener { onComplete() }
+                .addOnCompleteListener {
+                    mlKitReadyIsos = mlKitReadyIsos - code
+                    onComplete()
+                }
         } catch (_: Throwable) {
             onComplete()
         }
@@ -697,6 +788,7 @@ class TranslationEngine(
                         }
                     }
                     if (found.isNotEmpty()) found.add("en")
+                    mlKitReadyIsos = found.toSet()
                     callback(found)
                 }
                 .addOnFailureListener { callback(emptySet()) }

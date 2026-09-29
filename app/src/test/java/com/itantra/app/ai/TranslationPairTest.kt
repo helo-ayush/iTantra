@@ -10,41 +10,52 @@ class TranslationPairTest {
     fun sameLanguageIsAlwaysPassthrough() {
         assertTrue(TranslationEngine.canTranslatePair("ml", "ml", emptySet(), emptySet()))
         assertTrue(TranslationEngine.canTranslatePair("hi", "hi", emptySet(), emptySet()))
-        assertTrue(TranslationEngine.canTranslatePair("or", "or", setOf(), setOf("nmt-or")))
+        assertTrue(TranslationEngine.canTranslatePair("en", "en", emptySet(), emptySet()))
+        assertTrue(TranslationEngine.canTranslatePair("ta", "ta", emptySet(), emptySet()))
     }
 
     @Test
-    fun mlKitPairNeedsBothNonEnglishPacks() {
-        // ta->bn needs ta pack + bn pack.
-        assertTrue(TranslationEngine.canTranslatePair("ta", "bn", setOf("ta", "bn", "en"), emptySet()))
-        assertFalse(TranslationEngine.canTranslatePair("ta", "bn", setOf("ta", "en"), emptySet()))
-        assertFalse(TranslationEngine.canTranslatePair("ta", "bn", setOf("en"), emptySet()))
-        // ta->en needs only the ta pack.
-        assertTrue(TranslationEngine.canTranslatePair("ta", "en", setOf("ta", "en"), emptySet()))
-        assertFalse(TranslationEngine.canTranslatePair("ta", "en", setOf("en"), emptySet()))
+    fun pivotPolicyEnglishNeedsZeroPacks() {
+        // English never needs a downloaded pack to translate with English
+        assertTrue(TranslationEngine.canTranslatePair("en", "en", emptySet(), emptySet()))
+        // Communicating with English only requires the non-English side's pack
+        assertTrue(TranslationEngine.canTranslatePair("hi", "en", setOf("hi"), emptySet()))
+        assertTrue(TranslationEngine.canTranslatePair("en", "hi", setOf("hi"), emptySet()))
+        assertFalse(TranslationEngine.canTranslatePair("hi", "en", emptySet(), emptySet()))
     }
 
     @Test
-    fun opusPairNeedsItsPivotPack() {
-        assertTrue(TranslationEngine.canTranslatePair("ml", "en", setOf("en"), setOf("nmt-ml")))
-        assertTrue(TranslationEngine.canTranslatePair("en", "ml", setOf("en"), setOf("nmt-ml")))
-        assertFalse(TranslationEngine.canTranslatePair("ml", "en", setOf("en"), emptySet()))
-        assertFalse(TranslationEngine.canTranslatePair("en", "or", setOf("en"), setOf("nmt-ml")))
-        assertTrue(TranslationEngine.canTranslatePair("or", "en", setOf("en"), setOf("nmt-or")))
+    fun pivotPolicyMlKitLanguages() {
+        // ML Kit languages: hi, bn, gu, kn, mr, ta, te
+        // A single device translating an entire A->B pair locally needs both packs
+        assertTrue(TranslationEngine.canTranslatePair("ta", "bn", setOf("ta", "bn"), emptySet()))
+        assertFalse(TranslationEngine.canTranslatePair("ta", "bn", setOf("ta"), emptySet()))
+        assertFalse(TranslationEngine.canTranslatePair("ta", "bn", setOf("bn"), emptySet()))
+        assertFalse(TranslationEngine.canTranslatePair("ta", "bn", emptySet(), emptySet()))
+
+        // Communicating directly with English only requires the single pack
+        assertTrue(TranslationEngine.canTranslatePair("ta", "en", setOf("ta"), emptySet()))
+        assertFalse(TranslationEngine.canTranslatePair("ta", "en", emptySet(), emptySet()))
     }
 
     @Test
-    fun mixedMlKitOpusPairNeedsBothSides() {
-        // ml<->ta: nmt-ml pack AND the ta ML Kit pack.
-        assertTrue(
-            TranslationEngine.canTranslatePair("ml", "ta", setOf("ta", "en"), setOf("nmt-ml"))
-        )
-        assertFalse(
-            TranslationEngine.canTranslatePair("ml", "ta", setOf("en"), setOf("nmt-ml"))
-        )
-        assertFalse(
-            TranslationEngine.canTranslatePair("ml", "ta", setOf("ta", "en"), emptySet())
-        )
+    fun pivotPolicyOpusLanguages() {
+        // Opus languages: ml, or
+        assertTrue(TranslationEngine.canTranslatePair("ml", "en", emptySet(), setOf("nmt-ml")))
+        assertTrue(TranslationEngine.canTranslatePair("en", "ml", emptySet(), setOf("nmt-ml")))
+        assertFalse(TranslationEngine.canTranslatePair("ml", "en", emptySet(), emptySet()))
+
+        assertTrue(TranslationEngine.canTranslatePair("or", "en", emptySet(), setOf("nmt-or")))
+        assertTrue(TranslationEngine.canTranslatePair("en", "or", emptySet(), setOf("nmt-or")))
+        assertFalse(TranslationEngine.canTranslatePair("or", "en", emptySet(), emptySet()))
+    }
+
+    @Test
+    fun mixedMlKitAndOpusLanguages() {
+        // ml<->ta requires nmt-ml pack for ml and ta pack for ta
+        assertTrue(TranslationEngine.canTranslatePair("ml", "ta", setOf("ta"), setOf("nmt-ml")))
+        assertFalse(TranslationEngine.canTranslatePair("ml", "ta", emptySet(), setOf("nmt-ml")))
+        assertFalse(TranslationEngine.canTranslatePair("ml", "ta", setOf("ta"), emptySet()))
     }
 
     @Test
@@ -78,3 +89,4 @@ class TranslationPairTest {
         assertTrue(OpusTranslatorEngine.parseManifest("nmt-ml", """{"pairs": {}}""") == null)
     }
 }
+

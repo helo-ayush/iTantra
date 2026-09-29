@@ -293,7 +293,7 @@ fun WalkieScreen(
         ) {
             val warning = modelWarningMessage
             if (warning != null) {
-                val isMismatch = warning.contains("Language Mismatch", ignoreCase = true)
+                val isMismatch = warning.contains("Language Mismatch", ignoreCase = true) || warning.contains("Cross-language", ignoreCase = true)
                 val peerLangCode = activePeerLanguage
                 val peerLangName = peerLangCode?.let { SupportedLanguage.fromCode(it).englishName }
 
@@ -321,7 +321,7 @@ fun WalkieScreen(
                                 modifier = Modifier.size(17.dp)
                             )
                             Text(
-                                text = if (isMismatch) "Language mismatch" else "Radio notice",
+                                text = if (isMismatch) "Cross-language notice" else "Radio notice",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isMismatch) colors.rescueContainerText else colors.accentContainerText

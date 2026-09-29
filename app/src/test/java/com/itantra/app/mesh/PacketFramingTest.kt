@@ -150,4 +150,67 @@ class PacketFramingTest {
         // Declared 64 payload bytes, but only 20 actually present.
         assertNull(PacketFraming.decode(encoded.copyOf(PacketFraming.HEADER_BYTES + 20)))
     }
+
+    @Test
+    fun textPayloadRoundTripPreservesAllCharactersAndScripts() {
+        val testCases = listOf(
+            TextPayload(
+                wireLang = "en",
+                text = "Hello | world with pipes and \u001F unit separators and \n newlines!",
+                origText = "नमस्ते | दुनिया \u001F नई लाइन",
+                targetNodeId = 123456789L
+            ),
+            TextPayload(
+                wireLang = "hi",
+                text = "हम मलबे में दबे हैं | बचाओ! \n सांस लेने में तकलीफ है।",
+                origText = null,
+                targetNodeId = null
+            ),
+            TextPayload(
+                wireLang = "ta",
+                text = "நாங்கள் இடிபாடுகளில் சிக்கியுள்ளோம் | உதவி தேவை \u001F அவசரம் \n காப்பாற்றுங்கள்",
+                origText = "We are trapped under rubble | need help",
+                targetNodeId = 9876543210L
+            ),
+            TextPayload(
+                wireLang = "en",
+                text = "Simple broadcast text without target or orig",
+                origText = null,
+                targetNodeId = null
+            )
+        )
+
+        for (case in testCases) {
+            val encoded = TextPayload.encode(case)
+            val decoded = TextPayload.decode(encoded)
+            assertNotNull("Encoded payload must decode successfully", decoded)
+            decoded?.let {
+                assertEquals(case.wireLang, it.wireLang)
+                assertEquals(case.text, it.text)
+                assertEquals(case.origText, it.origText)
+                assertEquals(case.targetNodeId, it.targetNodeId)
+            }
+        }
+    }
+
+    @Test
+    fun textPayloadDecodesLegacyStringFormats() {
+        // Legacy format: to:123|en|Hello world|orig:नमस्ते|fromLang:hi|trans:1
+        val legacyBytes = "to:123|en|Hello world|orig:नमस्ते|fromLang:hi|trans:1".toByteArray(Charsets.UTF_8)
+        val decoded = TextPayload.decode(legacyBytes)
+        assertNotNull(decoded)
+        assertEquals(123L, decoded?.targetNodeId)
+        assertEquals("en", decoded?.wireLang)
+        assertEquals("Hello world", decoded?.text)
+        assertEquals("नमस्ते", decoded?.origText)
+
+        // Legacy format without target: hi|मदद चाहिए
+        val legacyNoTarget = "hi|मदद चाहिए".toByteArray(Charsets.UTF_8)
+        val decodedNoTarget = TextPayload.decode(legacyNoTarget)
+        assertNotNull(decodedNoTarget)
+        assertNull(decodedNoTarget?.targetNodeId)
+        assertEquals("hi", decodedNoTarget?.wireLang)
+        assertEquals("मदद चाहिए", decodedNoTarget?.text)
+    }
 }
+

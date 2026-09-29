@@ -45,6 +45,7 @@ import com.itantra.app.mesh.DiscoveredBeacon
 import com.itantra.app.mesh.DistressBeaconPayload
 import com.itantra.app.mesh.ItantraPacket
 import com.itantra.app.mesh.PacketFraming
+import com.itantra.app.mesh.TextPayload
 import com.itantra.app.mesh.PairingHandshakePayload
 import com.itantra.app.mesh.PairingSyncPayload
 import com.itantra.app.mesh.PeerProfile
@@ -609,13 +610,17 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun translateEmergencyText(text: String, fromIso: String, toIso: String): String {
-        return translationEngine.translate(text, fromIso, toIso)
+        return runCatching {
+            kotlinx.coroutines.runBlocking {
+                translationEngine.translate(text, fromIso, toIso)
+            }
+        }.getOrNull() ?: text
     }
 
     fun broadcastTranslationCapability() {
-        val isInstalled = translationEngine.isInstalled()
         val localLang = _uiState.value.selectedLanguage.code
-        val payload = "$localLang|${if (isInstalled) 1 else 0}".toByteArray(Charsets.UTF_8)
+        val isReady = translationEngine.myPackReady(localLang)
+        val payload = "$localLang|${if (isReady) 1 else 0}".toByteArray(Charsets.UTF_8)
         val packet = ItantraPacket(
             nodeId = _nodeId.value,
             ttl = _meshHopLimit.value,
@@ -648,28 +653,21 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         _activePeerLanguage.value = peerLang
 
         if (peerNodeId != null && peerLang != null && !peerLang.equals(localLang, ignoreCase = true)) {
-            // Pivot rule, per direction: WE only ever need OUR leg (own
-            // language -> English). The peer must be able to put English on
-            // the wire too — either it speaks English, or it reports a
-            // translator (its own pack covers its leg). The link stays open
-            // only while BOTH directions flow; otherwise the mic stops and
-            // the prompt names the missing side, instead of trading garbage
-            // audio both ways.
-            //
-            //   Gujarati (no pack) x Tamil (packed): out dead -> prohibited.
-            //   Hindi (packed) x Tamil (packed): both live -> open.
-            val outWorks = translationEngine.isInstalled() ||
-                translationEngine.canTranslate(localLang, "en")
-            val peerHasTranslator = peerTranslatorAvailable[peerNodeId] == true
-            val inWorks = peerLang.equals("en", ignoreCase = true) || peerHasTranslator
-            if (!(outWorks && inWorks)) {
+            val localIsEnglish = localLang.equals("en", ignoreCase = true)
+            val peerIsEnglish = peerLang.equals("en", ignoreCase = true)
+
+            // English users are NEVER blocked in either direction
+            val outWorks = localIsEnglish || translationEngine.myPackReady(localLang)
+            val inWorks = peerIsEnglish || (peerTranslatorAvailable[peerNodeId] == true)
+
+            if (!outWorks || !inWorks) {
                 _isCrossLingualBlocked.value = true
                 val localName = SupportedLanguage.fromCode(localLang).englishName
                 val peerName = SupportedLanguage.fromCode(peerLang).englishName
                 _modelWarningMessage.value = if (!outWorks) {
-                    "⚠️ Cannot talk with $peerName speaker: download the $localName translator first (Settings → Models → $localName card). Without it they would only hear untranslated $localName."
+                    "⚠️ Cross-language conversation not possible: please download the $localName translation pack in Settings → Models."
                 } else {
-                    "⚠️ $peerName speaker cannot reply yet: ask them to download their $peerName translator. Without it you would only hear untranslated $peerName."
+                    "⚠️ Cross-language conversation not possible: $peerName speaker needs their translation pack to reply."
                 }
                 syncVoiceCaptureState()
                 return
@@ -677,11 +675,15 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         }
 
         _isCrossLingualBlocked.value = false
-        if (_modelWarningMessage.value?.startsWith("⚠️ Language Mismatch") == true) {
+        if (_modelWarningMessage.value?.startsWith("⚠️ Cross-language") == true ||
+            _modelWarningMessage.value?.startsWith("⚠️ Cannot talk") == true ||
+            _modelWarningMessage.value?.startsWith("⚠️ Language Mismatch") == true
+        ) {
             _modelWarningMessage.value = null
         }
         syncVoiceCaptureState()
     }
+
 
     /** The active catalogue: the built-in fallback, refreshed over the network when available. */
     private val _catalogue = MutableStateFlow<List<CatalogueLanguage>>(ModelCatalogue.fallbackLanguages)
@@ -1683,7 +1685,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             msgType = PacketFraming.MSG_TYPE_VOICE_LINK_REQUEST,
             payload = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN)
                 .putLong(victim.nodeId)
-                .put(if (translationEngine.anyTranslatorInstalled()) 1.toByte() else 0.toByte())
+                .put(if (translationEngine.myPackReady(_uiState.value.selectedLanguage.code)) 1.toByte() else 0.toByte())
                 .array()
         )
         if (_wifiDirectEnabled.value) {
@@ -2694,12 +2696,13 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 }
             }
             PacketFraming.MSG_TYPE_TRANSLATED_TEXT -> {
-                // 1-to-1 frames carry a `to:<nodeId>|` prefix (see
-                // buildTargetedTextPayload). A frame addressed to another node
-                // in the same group is relayed already (above) but must never
-                // light up our transcript, stop our siren, or speak here.
-                val rawWithTarget = String(packet.payload, Charsets.UTF_8)
-                val (textTarget, rawPayload) = extractTextTarget(rawWithTarget)
+                val payload = TextPayload.decode(packet.payload)
+                if (payload == null) {
+                    logVoice("rx", "failed to decode text payload from ${nodeCallsign(packet.nodeId)}")
+                    return
+                }
+
+                val textTarget = payload.targetNodeId
                 if (textTarget != null && textTarget != 0L && textTarget != _nodeId.value) {
                     logVoice(
                         "rx",
@@ -2708,184 +2711,110 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                     return
                 }
                 val isDirectlyTargeted = textTarget != null && textTarget == _nodeId.value
-                if (_isWalkieActive.value && !_isRescueActive.value && !_isSosBroadcasting.value) {
+
+                // Walkie gate: stop silently dropping early messages.
+                // If targeted to us, always allow.
+                // In walkie mode, allow all group & mesh chatter through to transcript.
+                if (_isWalkieActive.value && !_isRescueActive.value && !_isSosBroadcasting.value && !isDirectlyTargeted) {
                     val inP2pGroup = wifiDirectMeshManager?.isGroupFormed?.value == true
                     val isPaired = settingsRepository.pairedWalkieNodeIds.value.contains(packet.nodeId)
-                    if (!isPaired && !inP2pGroup) {
-                        logVoice("rx", "walkie text dropped: sender ${nodeCallsign(packet.nodeId)} is neither paired nor in P2P group")
-                        return
+                    val isDiscovered = _discoveredWalkieDevices.value.any { it.id.contains(packet.nodeId.toString()) }
+                    if (!isPaired && !inP2pGroup && !isDiscovered) {
+                        logVoice("rx", "walkie text from unlinked peer ${nodeCallsign(packet.nodeId)}: allowing through to transcript")
                     }
                 }
+
                 refreshRescuerContact(packet.nodeId)
                 refreshVictimContact(packet.nodeId)
-                val pipeIndex = rawPayload.indexOf('|')
-                val (incomingLangCode, payloadBody) = if (pipeIndex != -1) {
-                    rawPayload.substring(0, pipeIndex) to rawPayload.substring(pipeIndex + 1)
-                } else {
-                    _uiState.value.selectedLanguage.code to rawPayload
-                }
-
-                // Parse optional sub-fields: orig:..., fromLang:..., trans:...
-                val subParts = payloadBody.split('|')
-                val mainText = subParts[0]
-                var origText: String? = null
-                var fromLang: String? = null
-                for (i in 1 until subParts.size) {
-                    val p = subParts[i]
-                    when {
-                        p.startsWith("orig:") -> origText = p.removePrefix("orig:")
-                        p.startsWith("fromLang:") -> fromLang = p.removePrefix("fromLang:")
-                        p.startsWith("trans:") -> {
-                            val hasTrans = p.removePrefix("trans:") == "1"
-                            peerTranslatorAvailable[packet.nodeId] = hasTrans
-                            checkCrossLingualStatus()
-                        }
-                    }
-                }
-                if (fromLang != null) {
-                    peerLanguages[packet.nodeId] = fromLang
-                    checkCrossLingualStatus()
-                }
 
                 val localLang = _uiState.value.selectedLanguage.code
-                var textToSpeak = mainText
-                var langToSpeak = incomingLangCode
-                var uiDisplayText = mainText
+                val incomingLang = payload.wireLang
 
-                // Inbound translation if incoming text is in peer's language and local translator is installed
-                if (!incomingLangCode.equals(localLang, ignoreCase = true) &&
-                    (translationEngine.isInstalled() ||
-                        translationEngine.canTranslate(incomingLangCode, localLang))
-                ) {
-                    val localTranslated = translationEngine.translate(mainText, incomingLangCode, localLang)
-                    logVoice("translate", "inbound cross-lingual: '$mainText' ($incomingLangCode) -> '$localTranslated' ($localLang)")
-                    textToSpeak = localTranslated
-                    langToSpeak = localLang
-                    uiDisplayText = "$localTranslated (Original: $mainText)"
-                } else if (origText != null && !origText.equals(mainText, ignoreCase = true)) {
-                    uiDisplayText = "$mainText (Original: $origText)"
-                }
-
-                logVoice("decode", "text from ${nodeCallsign(packet.nodeId)} (lang=$incomingLangCode, speak=$langToSpeak): '$uiDisplayText'")
-
-                if (textToSpeak.isNotBlank()) {
-                    // If in SOS mode and not currently connected, auto-lock onto this rescuer —
-                    // but ONLY for a directly-targeted frame. A broadcast frame
-                    // (megaphone, walkie chatter, another victim's audio) must
-                    // never lock us to a rescuer that is talking to someone else.
-                    if (_isSosBroadcasting.value && _connectedRescuer.value == null && isDirectlyTargeted) {
-                        if (System.currentTimeMillis() - lastExplicitDisconnectEpochMs <= EXPLICIT_DISCONNECT_GRACE_MS) {
-                            logVoice(
-                                "sos",
-                                "auto-lock suppressed: within ${EXPLICIT_DISCONNECT_GRACE_MS}ms of explicit disconnect (text from ${nodeCallsign(packet.nodeId)})"
-                            )
-                        } else {
-                            lastRescuerContactEpochMs = System.currentTimeMillis()
-                            val rescuerId = "resc-${packet.nodeId}"
-                            val existing = _nearbyRescuers.value.firstOrNull { it.id == rescuerId }
-                            _connectedRescuer.value = existing?.copy(isConnected = true)
-                                ?: rescuerNodeFor(packet.nodeId, "iTantra Rescuer")
-                            // Backup silence path when the link request itself
-                            // was lost: kill the siren at once.
-                            audioPlaybackEngine?.stopTones()
-                            syncVoiceCaptureState()
-                            checkCrossLingualStatus()
-                        }
-                    }
-                    // If in Rescue mode and not currently connected, auto-lock onto this distress victim.
-                    // Never while doing a 1-way broadcast-all (a megaphone
-                    // announcement must not be hijacked into a 1-to-1 link),
-                    // and never within the grace window after an explicit
-                    // disconnect. Frames addressed to a different node were
-                    // already dropped above, so anything reaching here is for
-                    // us (targeted) or a true broadcast (victim's manual
-                    // phrase chip before any link exists).
-                    if (_isRescueActive.value && _connectedVictimIntercom.value == null && !_isBroadcastingToAll.value) {
-                        val victim = _activeDistressVictims.value.firstOrNull { it.nodeId == packet.nodeId }
-                        if (victim != null) {
-                            if (System.currentTimeMillis() - lastExplicitDisconnectEpochMs <= EXPLICIT_DISCONNECT_GRACE_MS) {
-                                logVoice(
-                                    "rescue",
-                                    "auto-lock suppressed: within ${EXPLICIT_DISCONNECT_GRACE_MS}ms of explicit disconnect (text from victim ${nodeCallsign(packet.nodeId)})"
-                                )
-                            } else {
-                                _connectedVictimIntercom.value = victim.copy(isIntercomConnected = true)
-                                _rescueConnectionMode.value = RescueConnectionMode.ONE_TO_ONE
-                                lastVictimContactEpochMs = System.currentTimeMillis()
-                                startRescuerBeaconAdvertising()
-                                syncVoiceCaptureState()
-                                checkCrossLingualStatus()
-                            }
-                        }
-                    }
-
-                    // 1. ALWAYS record in UI transcript and message log so emergency messages are never lost
-                    viewModelScope.launch(Dispatchers.Main) {
-                        _uiState.update {
-                            it.copy(
-                                currentTranscript = uiDisplayText,
-                                voiceStatus = null,
-                                activeIncomingCaption = uiDisplayText,
-                                channelState = RadioChannelState.RECEIVING
-                            )
-                        }
-                        val receivedMsg = VoiceMessageEntity(
-                            id = System.currentTimeMillis(),
-                            messageUid = UUID.randomUUID().toString(),
-                            text = uiDisplayText,
-                            senderCallsign = nodeCallsign(packet.nodeId),
-                            isLocal = false,
-                            languageCode = langToSpeak,
-                            timestamp = System.currentTimeMillis(),
-                            isAlert = true
-                        )
-                        _messageLogs.update { listOf(receivedMsg) + it }
-                    }
-                    logVoice(
-                        "ui",
-                        "transcript + log updated from ${nodeCallsign(packet.nodeId)} (channelState=RECEIVING)"
-                    )
-
-                    // 2. Synthesize audio via TTS ONLY if local state authorizes voice playback
-                    if (shouldPlayIncomingVoiceText(packet.nodeId)) {
-                        // Throttle hallucinating peers: repeats and very short
-                        // clips inside their windows keep the transcript but
-                        // never grab the loudspeaker twice.
-                        val nowRx = System.currentTimeMillis()
-                        val lastSpoken = lastSpokenTextByNode[packet.nodeId]
-                        val isDup = lastSpoken != null &&
-                            lastSpoken.first == textToSpeak &&
-                            nowRx - lastSpoken.second <= INBOUND_DUP_WINDOW_MS
-                        val isShortSpam = textToSpeak.trim().length < INBOUND_SHORT_TEXT_CHARS &&
-                            lastSpoken != null &&
-                            nowRx - lastSpoken.second <= INBOUND_SHORT_COOLDOWN_MS
-                        if (isDup || isShortSpam) {
-                            logVoice(
-                                "rx",
-                                "TTS throttled for text from ${nodeCallsign(packet.nodeId)} " +
-                                    "(dup=$isDup shortSpam=$isShortSpam): transcript kept, speaker spared"
-                            )
-                        } else {
-                            lastSpokenTextByNode[packet.nodeId] = textToSpeak to nowRx
-                            if (lastSpokenTextByNode.size > 32) {
-                                val oldest = lastSpokenTextByNode.keys.firstOrNull()
-                                if (oldest != null) lastSpokenTextByNode.remove(oldest)
-                            }
-                            extendEchoGuard(ttsStartWindowMs)
-                            if (textToSpeak.isNotBlank() && textToSpeak.any { !it.isWhitespace() }) {
-                                recreateAudioWithTts(textToSpeak, langToSpeak)
-                            }
-                        }
+                // Pivot receive logic:
+                if (incomingLang.equals(localLang, ignoreCase = true)) {
+                    // Fast path: same language on wire
+                    val uiDisplayText = if (payload.origText != null && payload.origText != payload.text) {
+                        "${payload.text} (Original: ${payload.origText})"
                     } else {
-                        logVoice(
-                            "rx",
-                            "speech muted for text from ${nodeCallsign(packet.nodeId)}: local state not in active call/broadcast " +
-                                "(walkie=${_isWalkieActive.value}, rescuerCall=${_connectedVictimIntercom.value?.nodeId}, " +
-                                "victimCall=${_connectedRescuer.value?.id}, broadcast=${_isReceivingOneWayBroadcast.value})"
-                        )
+                        payload.text
                     }
+                    dispatchReceivedText(
+                        packet = packet,
+                        isDirectlyTargeted = isDirectlyTargeted,
+                        uiDisplayText = uiDisplayText,
+                        textToSpeak = payload.text,
+                        langToSpeak = localLang
+                    )
+                } else if (incomingLang.equals("en", ignoreCase = true)) {
+                    // Wire language is English (global pivot token)
+                    if (localLang.equals("en", ignoreCase = true)) {
+                        val uiDisplayText = if (payload.origText != null && payload.origText != payload.text) {
+                            "${payload.text} (Original: ${payload.origText})"
+                        } else {
+                            payload.text
+                        }
+                        dispatchReceivedText(
+                            packet = packet,
+                            isDirectlyTargeted = isDirectlyTargeted,
+                            uiDisplayText = uiDisplayText,
+                            textToSpeak = payload.text,
+                            langToSpeak = "en"
+                        )
+                    } else {
+                        // Local is non-English; translate English -> localLang
+                        if (translationEngine.myPackReady(localLang)) {
+                            viewModelScope.launch {
+                                val translated = translationEngine.fromEnglish(payload.text, localLang)
+                                if (!translated.isNullOrBlank()) {
+                                    val orig = payload.origText ?: payload.text
+                                    val uiDisplayText = "$translated (Original: $orig)"
+                                    dispatchReceivedText(
+                                        packet = packet,
+                                        isDirectlyTargeted = isDirectlyTargeted,
+                                        uiDisplayText = uiDisplayText,
+                                        textToSpeak = translated,
+                                        langToSpeak = localLang
+                                    )
+                                } else {
+                                    val localName = _uiState.value.selectedLanguage.englishName
+                                    withContext(Dispatchers.Main) {
+                                        _modelWarningMessage.value = "⚠️ Cross-language chat needs your $localName translation pack (Settings → Models)."
+                                    }
+                                    dispatchReceivedText(
+                                        packet = packet,
+                                        isDirectlyTargeted = isDirectlyTargeted,
+                                        uiDisplayText = "${payload.text} [Needs $localName pack to translate]",
+                                        textToSpeak = null,
+                                        langToSpeak = localLang
+                                    )
+                                }
+                            }
+                        } else {
+                            val localName = _uiState.value.selectedLanguage.englishName
+                            _modelWarningMessage.value = "⚠️ Cross-language chat needs your $localName translation pack (Settings → Models)."
+                            dispatchReceivedText(
+                                packet = packet,
+                                isDirectlyTargeted = isDirectlyTargeted,
+                                uiDisplayText = "${payload.text} [Needs $localName pack to translate]",
+                                textToSpeak = null,
+                                langToSpeak = localLang
+                            )
+                        }
+                    }
+                } else {
+                    // Unexpected wire language
+                    val wireLangName = SupportedLanguage.fromCode(incomingLang).englishName
+                    _modelWarningMessage.value = "⚠️ Cross-language conversation not possible: received unexpected $wireLangName text."
+                    dispatchReceivedText(
+                        packet = packet,
+                        isDirectlyTargeted = isDirectlyTargeted,
+                        uiDisplayText = "${payload.text} [$wireLangName - translation not possible]",
+                        textToSpeak = null,
+                        langToSpeak = localLang
+                    )
                 }
             }
+
             PacketFraming.MSG_TYPE_VOICE_FRAME -> {
                 // Ignore raw voice frames to preserve clean neural text-mesh voice pipeline & duplex intercom
                 return
@@ -2942,7 +2871,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                         msgType = PacketFraming.MSG_TYPE_VOICE_LINK_ACK,
                         payload = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN)
                             .putLong(packet.nodeId)
-                            .put(if (translationEngine.anyTranslatorInstalled()) 1.toByte() else 0.toByte())
+                            .put(if (translationEngine.myPackReady(_uiState.value.selectedLanguage.code)) 1.toByte() else 0.toByte())
                             .array()
                     )
                     broadcastMeshPacket(PacketFraming.encode(ackPacket), packet.nodeId, forceUdp = true)
@@ -3036,6 +2965,120 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
             }
         }
     }
+
+    private fun dispatchReceivedText(
+        packet: ItantraPacket,
+        isDirectlyTargeted: Boolean,
+        uiDisplayText: String,
+        textToSpeak: String?,
+        langToSpeak: String
+    ) {
+        logVoice("decode", "text from ${nodeCallsign(packet.nodeId)} (speak=${textToSpeak != null}, lang=$langToSpeak): '$uiDisplayText'")
+
+        // If in SOS mode and not currently connected, auto-lock onto this rescuer (for directly-targeted frame)
+        if (_isSosBroadcasting.value && _connectedRescuer.value == null && isDirectlyTargeted) {
+            if (System.currentTimeMillis() - lastExplicitDisconnectEpochMs <= EXPLICIT_DISCONNECT_GRACE_MS) {
+                logVoice(
+                    "sos",
+                    "auto-lock suppressed: within ${EXPLICIT_DISCONNECT_GRACE_MS}ms of explicit disconnect (text from ${nodeCallsign(packet.nodeId)})"
+                )
+            } else {
+                lastRescuerContactEpochMs = System.currentTimeMillis()
+                val rescuerId = "resc-${packet.nodeId}"
+                val existing = _nearbyRescuers.value.firstOrNull { it.id == rescuerId }
+                _connectedRescuer.value = existing?.copy(isConnected = true)
+                    ?: rescuerNodeFor(packet.nodeId, "iTantra Rescuer")
+                audioPlaybackEngine?.stopTones()
+                syncVoiceCaptureState()
+                checkCrossLingualStatus()
+            }
+        }
+
+        // If in Rescue mode and not currently connected, auto-lock onto this distress victim
+        if (_isRescueActive.value && _connectedVictimIntercom.value == null && !_isBroadcastingToAll.value) {
+            val victim = _activeDistressVictims.value.firstOrNull { it.nodeId == packet.nodeId }
+            if (victim != null) {
+                if (System.currentTimeMillis() - lastExplicitDisconnectEpochMs <= EXPLICIT_DISCONNECT_GRACE_MS) {
+                    logVoice(
+                        "rescue",
+                        "auto-lock suppressed: within ${EXPLICIT_DISCONNECT_GRACE_MS}ms of explicit disconnect (text from victim ${nodeCallsign(packet.nodeId)})"
+                    )
+                } else {
+                    _connectedVictimIntercom.value = victim.copy(isIntercomConnected = true)
+                    _rescueConnectionMode.value = RescueConnectionMode.ONE_TO_ONE
+                    lastVictimContactEpochMs = System.currentTimeMillis()
+                    startRescuerBeaconAdvertising()
+                    syncVoiceCaptureState()
+                    checkCrossLingualStatus()
+                }
+            }
+        }
+
+        // 1. ALWAYS record in UI transcript and message log so emergency messages are never lost
+        viewModelScope.launch(Dispatchers.Main) {
+            _uiState.update {
+                it.copy(
+                    currentTranscript = uiDisplayText,
+                    voiceStatus = null,
+                    activeIncomingCaption = uiDisplayText,
+                    channelState = RadioChannelState.RECEIVING
+                )
+            }
+            val receivedMsg = VoiceMessageEntity(
+                id = System.currentTimeMillis(),
+                messageUid = UUID.randomUUID().toString(),
+                text = uiDisplayText,
+                senderCallsign = nodeCallsign(packet.nodeId),
+                isLocal = false,
+                languageCode = langToSpeak,
+                timestamp = System.currentTimeMillis(),
+                isAlert = true
+            )
+            _messageLogs.update { listOf(receivedMsg) + it }
+        }
+        logVoice(
+            "ui",
+            "transcript + log updated from ${nodeCallsign(packet.nodeId)} (channelState=RECEIVING)"
+        )
+
+        // 2. Synthesize audio via TTS ONLY if text is present and local state authorizes voice playback
+        if (!textToSpeak.isNullOrBlank() && shouldPlayIncomingVoiceText(packet.nodeId)) {
+            val nowRx = System.currentTimeMillis()
+            val lastSpoken = lastSpokenTextByNode[packet.nodeId]
+            val isDup = lastSpoken != null &&
+                lastSpoken.first == textToSpeak &&
+                nowRx - lastSpoken.second <= INBOUND_DUP_WINDOW_MS
+            val isShortSpam = textToSpeak.trim().length < INBOUND_SHORT_TEXT_CHARS &&
+                lastSpoken != null &&
+                nowRx - lastSpoken.second <= INBOUND_SHORT_COOLDOWN_MS
+            if (isDup || isShortSpam) {
+                logVoice(
+                    "rx",
+                    "TTS throttled for text from ${nodeCallsign(packet.nodeId)} (dup=$isDup shortSpam=$isShortSpam): transcript kept, speaker spared"
+                )
+            } else {
+                lastSpokenTextByNode[packet.nodeId] = textToSpeak to nowRx
+                if (lastSpokenTextByNode.size > 32) {
+                    val oldest = lastSpokenTextByNode.keys.firstOrNull()
+                    if (oldest != null) lastSpokenTextByNode.remove(oldest)
+                }
+                extendEchoGuard(ttsStartWindowMs)
+                if (textToSpeak.isNotBlank() && textToSpeak.any { !it.isWhitespace() }) {
+                    recreateAudioWithTts(textToSpeak, langToSpeak)
+                }
+            }
+        } else if (textToSpeak.isNullOrBlank()) {
+            logVoice("rx", "audio playback skipped: textToSpeak is blank/null (missing translation pack or blocked)")
+        } else {
+            logVoice(
+                "rx",
+                "speech muted for text from ${nodeCallsign(packet.nodeId)}: local state not in active call/broadcast " +
+                    "(walkie=${_isWalkieActive.value}, rescuerCall=${_connectedVictimIntercom.value?.nodeId}, " +
+                    "victimCall=${_connectedRescuer.value?.id}, broadcast=${_isReceivingOneWayBroadcast.value})"
+            )
+        }
+    }
+
 
     // =========================================================================
     // ECHO GUARD (deterministic playback-state capture suppression)
@@ -3536,92 +3579,113 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 return@launch
             }
 
-            val peerLang = _activePeerLanguage.value
-            // Send rule (link state decides, nothing else): same language on
-            // both sides -> native passthrough; anything else on an active
-            // 1-to-1 link (peer known-foreign, or peer language not arrived
-            // yet) -> English, so the wire carries only native or English.
-            // Group/walkie chatter with no link peer stays native as before.
-            val inDirectLink = _connectedVictimIntercom.value != null ||
-                _connectedRescuer.value != null
-            val isCrossLingual = if (peerLang != null) {
-                !peerLang.equals(langCode, ignoreCase = true)
-            } else {
-                inDirectLink
-            }
-            // Legacy global flag OR our own pivot leg (own language -> English).
-            // The receiver covers English -> its own language with ITS pack,
-            // so the sender must never require the peer's pack locally —
-            // requiring both sides here is what let raw Hindi through.
-            // translate() itself still degrades gracefully, so attempting
-            // whenever either signal says yes can only help.
-            val localHasTranslator = translationEngine.isInstalled() ||
-                translationEngine.canTranslate(langCode, "en")
-
-            var textToSend = cleanText
-            var targetLangCode = langCode
-            var origTextToInclude: String? = null
-
-            if (isCrossLingual && localHasTranslator) {
-                // English-pivot rule: cross-lingual speech is ALWAYS converted
-                // to English before sending; the receiver converts English to
-                // its own language. Each side therefore needs only its own
-                // language pack, and no pair matrix is ever negotiated.
-                val translated = translationEngine.translate(cleanText, langCode, "en")
-                logVoice("translate", "outbound cross-lingual: '$cleanText' ($langCode) -> '$translated' (en)")
-                textToSend = translated
-                // Honest tagging: claim English only when the text actually
-                // changed; otherwise the receiver would TTS the wrong voice.
-                targetLangCode = if (translated == cleanText) langCode else "en"
-                origTextToInclude = cleanText
-            }
-
-            withContext(Dispatchers.Main) {
-                _modelWarningMessage.value = null
-            }
-
-            // 1. Update sender's local UI transcript and message log
-            withContext(Dispatchers.Main) {
-                val displayText = if (origTextToInclude != null) "$cleanText (➔ $textToSend)" else cleanText
-                _uiState.update { it.copy(currentTranscript = displayText, voiceStatus = null) }
-                val sentMsg = VoiceMessageEntity(
-                    id = System.currentTimeMillis(),
-                    messageUid = UUID.randomUUID().toString(),
-                    text = displayText,
-                    senderCallsign = _callsign.value,
-                    isLocal = true,
-                    languageCode = langCode,
-                    timestamp = System.currentTimeMillis(),
-                    isAlert = _isSosBroadcasting.value
-                )
-                _messageLogs.update { listOf(sentMsg) + it }
-            }
-            logVoice("ui", "local transcript + log updated: '$cleanText'")
-
-            // 2. Lightweight text packet over dual-transport mesh. In a 1-to-1
-            //    intercom the frame is addressed so the rest of the group
-            //    drops it instead of speaking it; otherwise it broadcasts.
-            //    (StateFlow reads are thread-safe — no Main hop needed here.)
             val textTarget = resolveTextTargetNodeId()
-            val payloadBuilder = StringBuilder("$targetLangCode|$textToSend")
-            if (origTextToInclude != null) {
-                payloadBuilder.append("|orig:$origTextToInclude")
-            }
-            payloadBuilder.append("|fromLang:$langCode")
-            payloadBuilder.append("|trans:${if (localHasTranslator) 1 else 0}")
-            val payloadString = buildTargetedTextPayload(textTarget, payloadBuilder.toString())
-            val textPacket = ItantraPacket(
-                nodeId = _nodeId.value,
-                ttl = _meshHopLimit.value,
-                msgType = PacketFraming.MSG_TYPE_TRANSLATED_TEXT,
-                payload = payloadString.toByteArray(Charsets.UTF_8)
-            )
-            val encodedText = PacketFraming.encode(textPacket)
-            logVoice("send", "text packet ${encodedText.size}B target=${textTarget?.let { nodeCallsign(it) } ?: "all"} (${textToSend.length} chars, lang=$targetLangCode)")
-            lastSentText = cleanText
-            lastSentTextEpochMs = System.currentTimeMillis()
-            broadcastMeshPacket(encodedText, textTarget)
+            sendTextMessage(cleanText, textTarget)
         }
+    }
+
+    /**
+     * Unified send path for text & transcribed voice messages across the mesh.
+     * Enforces the English-as-Global-Pivot policy:
+     * - Same language: fast path, native text directly on wire.
+     * - English speaker: native English directly on wire (global pivot).
+     * - Non-English speaker on cross-lingual link or broadcast:
+     *   requires local language pack -> translates to English -> sends English on wire.
+     * - If local language pack is missing: blocks transmission with warning (no leaking raw text).
+     */
+    suspend fun sendTextMessage(text: String, target: Long? = null) {
+        val cleanText = text.trim()
+        if (cleanText.isBlank()) return
+
+        val myLang = _uiState.value.selectedLanguage.code
+        val peerLang = if (target != null) {
+            peerLanguages[target]
+        } else {
+            _activePeerLanguage.value
+        }
+
+        val isSameLanguage = peerLang != null && peerLang.equals(myLang, ignoreCase = true)
+        val isEnglishUser = myLang.equals("en", ignoreCase = true)
+
+        var wireLang: String
+        var wireText: String
+        var origTextToInclude: String? = null
+
+        if (isSameLanguage) {
+            wireLang = myLang
+            wireText = cleanText
+            origTextToInclude = null
+        } else if (isEnglishUser) {
+            wireLang = "en"
+            wireText = cleanText
+            origTextToInclude = null
+        } else {
+            // Non-English speaker communicating cross-lingual or broadcast:
+            // Check if our own translation pack is ready.
+            if (!translationEngine.myPackReady(myLang)) {
+                val localLangName = _uiState.value.selectedLanguage.englishName
+                withContext(Dispatchers.Main) {
+                    _isCrossLingualBlocked.value = true
+                    _modelWarningMessage.value = "⚠️ Cross-language conversation not possible: please download the $localLangName translation pack in Settings → Models."
+                }
+                logVoice("send", "blocked: missing translation pack for $myLang ($localLangName)")
+                return
+            }
+
+            val translated = translationEngine.toEnglish(cleanText, myLang)
+            if (translated.isNullOrBlank()) {
+                val localLangName = _uiState.value.selectedLanguage.englishName
+                withContext(Dispatchers.Main) {
+                    _modelWarningMessage.value = "⚠️ Translation to English failed. Check $localLangName pack in Settings."
+                }
+                logVoice("send", "translation failed for '$cleanText' ($myLang -> en)")
+                return
+            }
+
+            wireLang = "en"
+            wireText = translated
+            origTextToInclude = cleanText
+        }
+
+        withContext(Dispatchers.Main) {
+            _modelWarningMessage.value = null
+            _isCrossLingualBlocked.value = false
+            val displayText = if (origTextToInclude != null && origTextToInclude != wireText) "$cleanText (➔ $wireText)" else cleanText
+            _uiState.update { it.copy(currentTranscript = displayText, voiceStatus = null) }
+            val sentMsg = VoiceMessageEntity(
+                id = System.currentTimeMillis(),
+                messageUid = UUID.randomUUID().toString(),
+                text = displayText,
+                senderCallsign = _callsign.value,
+                isLocal = true,
+                languageCode = myLang,
+                timestamp = System.currentTimeMillis(),
+                isAlert = _isSosBroadcasting.value
+            )
+            _messageLogs.update { listOf(sentMsg) + it }
+            logVoice("ui", "local transcript + log updated: '$cleanText'")
+        }
+
+        val payload = TextPayload(
+            wireLang = wireLang,
+            text = wireText,
+            origText = origTextToInclude,
+            targetNodeId = target
+        )
+        val textPacket = ItantraPacket(
+            nodeId = _nodeId.value,
+            ttl = _meshHopLimit.value,
+            msgType = PacketFraming.MSG_TYPE_TRANSLATED_TEXT,
+            payload = TextPayload.encode(payload)
+        )
+        val encodedText = PacketFraming.encode(textPacket)
+        logVoice(
+            "send",
+            "text packet ${encodedText.size}B target=${target?.let { nodeCallsign(it) } ?: "all"} (${wireText.length} chars, wireLang=$wireLang)"
+        )
+        lastSentText = cleanText
+        lastSentTextEpochMs = System.currentTimeMillis()
+        broadcastMeshPacket(encodedText, target)
     }
 
     /**
@@ -3631,77 +3695,12 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     fun sendBroadcastTextMessage(text: String) {
         val trimmed = text.trim()
         if (trimmed.isBlank()) return
-        if (_isCrossLingualBlocked.value) {
-            val localLangName = _uiState.value.selectedLanguage.englishName
-            val peerLangName = _activePeerLanguage.value?.let { SupportedLanguage.fromCode(it).englishName } ?: "Peer"
-            _modelWarningMessage.value = "⚠️ Language Mismatch: Local speaks $localLangName but peer speaks $peerLangName. Offline Translation model required before sending text. Please download in Settings → Models."
-            return
-        }
-        val selectedLang = _uiState.value.selectedLanguage
-        val langCode = selectedLang.code
-
-        val peerLang = _activePeerLanguage.value
-        // Same send rule as flushVoiceTurn: same language -> native,
-        // otherwise English on an active link, native for link-less chatter.
-        val inDirectLink = _connectedVictimIntercom.value != null ||
-            _connectedRescuer.value != null
-        val isCrossLingual = if (peerLang != null) {
-            !peerLang.equals(langCode, ignoreCase = true)
-        } else {
-            inDirectLink
-        }
-        // Own pivot leg only (see flushVoiceTurn): the peer covers its side.
-        val localHasTranslator = translationEngine.isInstalled() ||
-            translationEngine.canTranslate(langCode, "en")
-
-        var textToSend = trimmed
-        var targetLangCode = langCode
-        var origTextToInclude: String? = null
-
-        if (isCrossLingual && localHasTranslator) {
-            // English-pivot rule (see flushVoiceTurn): receivers convert from
-            // English, so cross-lingual speech always leaves as English.
-            val translated = translationEngine.translate(trimmed, langCode, "en")
-            textToSend = translated
-            targetLangCode = if (translated == trimmed) langCode else "en"
-            origTextToInclude = trimmed
-        }
-
-        viewModelScope.launch(Dispatchers.Main) {
-            val displayText = if (origTextToInclude != null) "$trimmed (➔ $textToSend)" else trimmed
-            _uiState.update { it.copy(currentTranscript = displayText, voiceStatus = null) }
-            val sentMsg = VoiceMessageEntity(
-                id = System.currentTimeMillis(),
-                messageUid = UUID.randomUUID().toString(),
-                text = displayText,
-                senderCallsign = _callsign.value,
-                isLocal = true,
-                languageCode = langCode,
-                timestamp = System.currentTimeMillis(),
-                isAlert = _isSosBroadcasting.value
-            )
-            _messageLogs.update { listOf(sentMsg) + it }
-            logVoice("ui", "local dictation/text logged: '$displayText'")
-        }
-
-        val payloadBuilder = StringBuilder("$targetLangCode|$textToSend")
-        if (origTextToInclude != null) {
-            payloadBuilder.append("|orig:$origTextToInclude")
-        }
-        payloadBuilder.append("|fromLang:$langCode")
-        payloadBuilder.append("|trans:${if (localHasTranslator) 1 else 0}")
         val textTarget = resolveTextTargetNodeId()
-        val payloadString = buildTargetedTextPayload(textTarget, payloadBuilder.toString())
-        val textPacket = ItantraPacket(
-            nodeId = _nodeId.value,
-            ttl = _meshHopLimit.value,
-            msgType = PacketFraming.MSG_TYPE_TRANSLATED_TEXT,
-            payload = payloadString.toByteArray(Charsets.UTF_8)
-        )
-        val encodedText = PacketFraming.encode(textPacket)
-        logVoice("send", "text packet ${encodedText.size}B (${textToSend.length} chars, lang=$targetLangCode) -> ${textTarget?.let { nodeCallsign(it) } ?: "all peers"}")
-        broadcastMeshPacket(encodedText, textTarget)
+        viewModelScope.launch {
+            sendTextMessage(trimmed, textTarget)
+        }
     }
+
 
     private var ttsPlaybackJob: Job? = null
 
@@ -4305,15 +4304,12 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     fun broadcastDistressAlert(priority: AlertPriority = AlertPriority.CRITICAL_DISTRESS, customMessage: String = "") {
         val message = customMessage.ifBlank { _uiState.value.selectedLanguage.sampleAlertPhrase }
-        val packet = ItantraPacket(
-            nodeId = _nodeId.value,
-            ttl = _meshHopLimit.value,
-            msgType = PacketFraming.MSG_TYPE_TRANSLATED_TEXT,
-            payload = message.toByteArray(Charsets.UTF_8)
-        )
         wifiDirectMeshManager?.startUdpBroadcast()
-        broadcastMeshPacket(PacketFraming.encode(packet))
+        viewModelScope.launch {
+            sendTextMessage(message, null)
+        }
     }
+
 
     fun playVoiceMessage(message: VoiceMessageEntity) {
         viewModelScope.launch {
@@ -4673,20 +4669,7 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
         return null
     }
 
-    private fun buildTargetedTextPayload(targetNodeId: Long?, body: String): String =
-        if (targetNodeId == null || targetNodeId == 0L) body else "to:$targetNodeId|$body"
 
-    /**
-     * Splits an inbound TRANSLATED_TEXT body into (targetNodeId, body).
-     * Returns (null, raw) when no `to:<digits>|` prefix is present.
-     */
-    private fun extractTextTarget(rawPayload: String): Pair<Long?, String> {
-        if (!rawPayload.startsWith("to:")) return null to rawPayload
-        val pipe = rawPayload.indexOf('|')
-        if (pipe == -1) return null to rawPayload
-        val target = rawPayload.substring(3, pipe).toLongOrNull() ?: return null to rawPayload
-        return target to rawPayload.substring(pipe + 1)
-    }
 
     /**
      * Sends [packetBytes] over the mesh.

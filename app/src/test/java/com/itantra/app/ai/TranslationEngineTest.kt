@@ -1,6 +1,9 @@
 package com.itantra.app.ai
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -15,52 +18,59 @@ class TranslationEngineTest {
     }
 
     @Test
-    fun translatesDirectHindiPhrasesToEnglish() {
-        assertEquals("Need help", engine.translate("मदद चाहिए", "hi", "en"))
-        assertEquals("Save me", engine.translate("बचाओ", "hi", "en"))
-        assertEquals("We are trapped under rubble", engine.translate("हम मलबे में दबे हैं", "hi", "en"))
-        assertEquals("Need water", engine.translate("पानी चाहिए", "hi", "en"))
-        assertEquals("Having difficulty breathing", engine.translate("सांस लेने में तकलीफ है", "hi", "en"))
-        assertEquals("Bleeding heavily", engine.translate("खून बह रहा है", "hi", "en"))
-        assertEquals("Where are you?", engine.translate("आप कहां हैं", "hi", "en"))
-    }
-
-    @Test
-    fun translatesDirectEnglishPhrasesToHindi() {
-        assertEquals("मदद चाहिए", engine.translate("Need help", "en", "hi"))
-        assertEquals("बचाओ", engine.translate("Save me", "en", "hi"))
-        assertEquals("हम मलबे में दबे हैं", engine.translate("We are trapped under rubble", "en", "hi"))
-        assertEquals("बचाव दल आ रहा है", engine.translate("Rescue team is on the way", "en", "hi"))
-        assertEquals("ऑक्सीजन चाहिए", engine.translate("Need oxygen", "en", "hi"))
-        assertEquals("क्या आप ठीक हैं?", engine.translate("Are you okay?", "en", "hi"))
-    }
-
-    @Test
-    fun handlesCaseInsensitiveEnglishInput() {
-        assertEquals("मदद चाहिए", engine.translate("need help", "en", "hi"))
-        assertEquals("मदद चाहिए", engine.translate("NEED HELP", "en", "hi"))
-        assertEquals("बचाव दल आ रहा है", engine.translate("RESCUE TEAM IS ON THE WAY", "en", "hi"))
-    }
-
-    @Test
-    fun handlesPunctuationCleanly() {
-        assertEquals("Need help", engine.translate("मदद चाहिए!", "hi", "en"))
-        assertEquals("Need help", engine.translate("मदद चाहिए???", "hi", "en"))
-        assertEquals("मदद चाहिए", engine.translate("Need help!", "en", "hi"))
-    }
-
-    @Test
-    fun returnsOriginalWhenLanguagesMatchOrEmpty() {
-        assertEquals("", engine.translate("", "hi", "en"))
-        assertEquals("", engine.translate("   ", "hi", "en"))
+    fun identityCasesReturnOriginalWithoutCallingModels() = runBlocking {
+        // English is the global pivot token; identity requires 0 packs
+        assertEquals("Hello world", engine.toEnglish("Hello world", "en"))
+        assertEquals("Rescue team here", engine.fromEnglish("Rescue team here", "en"))
         assertEquals("Hello world", engine.translate("Hello world", "en", "en"))
+
+        // Same language passthrough
         assertEquals("नमस्ते", engine.translate("नमस्ते", "hi", "hi"))
+        assertEquals("வணக்கம்", engine.translate("வணக்கம்", "ta", "ta"))
+
+        // Blank/empty inputs
+        assertEquals("", engine.toEnglish("", "en"))
+        assertEquals("", engine.toEnglish("   ", "hi"))
+        assertEquals("", engine.fromEnglish("", "en"))
+        assertEquals("", engine.translate("", "hi", "en"))
     }
 
     @Test
-    fun translatesWordSubstitutionsForNovelCombinations() {
-        val result = engine.translate("Trapped child need water", "en", "hi")
-        // Both "child" -> "बच्चा" and "water" -> "पानी" should be translated
-        assertTrue("Expected translated tokens in: $result", result.contains("बच्चा") || result.contains("पानी"))
+    fun englishPackIsAlwaysReady() {
+        // English requires no download (0 MB, pivot token)
+        assertTrue(engine.myPackReady("en"))
+        assertTrue(engine.myPackReady("en-IN"))
+        assertTrue(engine.myPackReady("EN-US"))
+    }
+
+    @Test
+    fun missingPackReturnsNullInsteadOfCrashingOrFabricating() = runBlocking {
+        // Default engine has no downloaded packs in host test
+        assertFalse(engine.myPackReady("hi"))
+        assertFalse(engine.myPackReady("ta"))
+        assertFalse(engine.myPackReady("ml"))
+        assertFalse(engine.myPackReady("or"))
+
+        // Missing packs must return null so caller can cleanly abort/warn
+        assertNull(engine.toEnglish("मदद चाहिए", "hi"))
+        assertNull(engine.fromEnglish("Need help", "ta"))
+        assertNull(engine.translate("मदद चाहिए", "hi", "en"))
+        assertNull(engine.translate("मदद चाहिए", "hi", "ta"))
+    }
+
+    @Test
+    fun normalizeIsoStaticHandlesDialectsAndCases() {
+        assertEquals("hi", TranslationEngine.normalizeIsoStatic("hi"))
+        assertEquals("hi", TranslationEngine.normalizeIsoStatic("hi-IN"))
+        assertEquals("en", TranslationEngine.normalizeIsoStatic("en-US"))
+        assertEquals("ta", TranslationEngine.normalizeIsoStatic("ta-IN"))
+        assertEquals("ml", TranslationEngine.normalizeIsoStatic("ml-IN"))
+        assertEquals("or", TranslationEngine.normalizeIsoStatic("or-IN"))
+        assertEquals("unknown", TranslationEngine.normalizeIsoStatic("unknown"))
+    }
+
+    @Test
+    fun cleanWhitespaceCleansMultipleSpacesAndTrims() {
+        assertEquals("hello world", TranslationEngine.cleanWhitespace("   hello    world  \n "))
     }
 }

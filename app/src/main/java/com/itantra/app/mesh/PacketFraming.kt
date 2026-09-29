@@ -44,6 +44,145 @@ data class ItantraPacket(
 }
 
 /**
+ * Strict, length-prefixed codec for [PacketFraming.MSG_TYPE_TRANSLATED_TEXT].
+ *
+ * Wire format is length-prefixed and immune to any characters in [text]
+ * (such as '|', '\u001F', newlines, Devanagari, Tamil, etc.).
+ *
+ * Layout:
+ * - MAGIC: 1 byte (0x54, ASCII 'T')
+ * - FLAGS: 1 byte
+ *     - Bit 0: hasTargetNodeId (if 1, 8 bytes Long follows)
+ *     - Bit 1: hasOrigText (if 1, 4 bytes Int len + origText UTF-8 follows text)
+ * - [Optional targetNodeId: 8 bytes Long]
+ * - wireLang: 1 byte unsigned length + UTF-8 bytes
+ * - text: 4 bytes Int length + UTF-8 bytes
+ * - [Optional origText: 4 bytes Int length + UTF-8 bytes]
+ *
+ * Also decodes fallback string formats (unit separator '\u001F' or legacy pipe '|').
+ */
+data class TextPayload(
+    val wireLang: String,
+    val text: String,
+    val origText: String? = null,
+    val targetNodeId: Long? = null
+) {
+    companion object {
+        const val MAGIC: Byte = 0x54 // 'T'
+
+        fun encode(payload: TextPayload): ByteArray {
+            val wireLangBytes = payload.wireLang.toByteArray(Charsets.UTF_8)
+            val textBytes = payload.text.toByteArray(Charsets.UTF_8)
+            val origBytes = payload.origText?.toByteArray(Charsets.UTF_8)
+
+            var flags = 0
+            val hasTarget = payload.targetNodeId != null && payload.targetNodeId != 0L
+            if (hasTarget) flags = flags or 0x01
+            if (origBytes != null) flags = flags or 0x02
+
+            val totalSize = 1 + // MAGIC
+                1 + // FLAGS
+                (if (hasTarget) 8 else 0) +
+                1 + wireLangBytes.size +
+                4 + textBytes.size +
+                (if (origBytes != null) 4 + origBytes.size else 0)
+
+            val buffer = ByteBuffer.allocate(totalSize).order(ByteOrder.BIG_ENDIAN)
+            buffer.put(MAGIC)
+            buffer.put(flags.toByte())
+            if (hasTarget) {
+                buffer.putLong(payload.targetNodeId!!)
+            }
+            buffer.put(wireLangBytes.size.toByte())
+            buffer.put(wireLangBytes)
+            buffer.putInt(textBytes.size)
+            buffer.put(textBytes)
+            if (origBytes != null) {
+                buffer.putInt(origBytes.size)
+                buffer.put(origBytes)
+            }
+            return buffer.array()
+        }
+
+        fun decode(bytes: ByteArray): TextPayload? {
+            if (bytes.isEmpty()) return null
+
+            // 1. Binary length-prefixed format
+            if (bytes[0] == MAGIC) {
+                return try {
+                    val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
+                    buffer.get() // MAGIC
+                    val flags = buffer.get().toInt()
+                    val targetNodeId = if ((flags and 0x01) != 0) buffer.getLong() else null
+
+                    val wireLangLen = buffer.get().toInt() and 0xFF
+                    val wireLangBytes = ByteArray(wireLangLen)
+                    buffer.get(wireLangBytes)
+                    val wireLang = String(wireLangBytes, Charsets.UTF_8)
+
+                    val textLen = buffer.getInt()
+                    val textBytes = ByteArray(textLen)
+                    buffer.get(textBytes)
+                    val text = String(textBytes, Charsets.UTF_8)
+
+                    val origText = if ((flags and 0x02) != 0) {
+                        val origLen = buffer.getInt()
+                        val origBytes = ByteArray(origLen)
+                        buffer.get(origBytes)
+                        String(origBytes, Charsets.UTF_8)
+                    } else null
+
+                    TextPayload(
+                        wireLang = wireLang,
+                        text = text,
+                        origText = origText,
+                        targetNodeId = targetNodeId
+                    )
+                } catch (_: Throwable) {
+                    null
+                }
+            }
+
+            // 2. Fallback to legacy string formats (e.g. "to:123|lang|text..." or "\u001F" delimited)
+            return try {
+                val raw = String(bytes, Charsets.UTF_8)
+                var working = raw
+                var targetId: Long? = null
+
+                if (working.startsWith("to:")) {
+                    val delimIdx = working.indexOfFirst { it == '|' || it == '\u001F' }
+                    if (delimIdx != -1) {
+                        targetId = working.substring(3, delimIdx).toLongOrNull()
+                        working = working.substring(delimIdx + 1)
+                    }
+                }
+
+                if (working.contains('\u001F')) {
+                    val parts = working.split('\u001F')
+                    val wireLang = parts.getOrNull(0) ?: "en"
+                    val text = parts.getOrNull(1) ?: ""
+                    val origText = parts.getOrNull(2)?.ifBlank { null }
+                    TextPayload(wireLang, text, origText, targetId)
+                } else {
+                    val parts = working.split('|')
+                    val wireLang = parts.getOrNull(0) ?: "en"
+                    val text = parts.getOrNull(1) ?: ""
+                    var origText: String? = null
+                    for (i in 2 until parts.size) {
+                        val p = parts[i]
+                        if (p.startsWith("orig:")) origText = p.removePrefix("orig:")
+                    }
+                    TextPayload(wireLang, text, origText, targetId)
+                }
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+}
+
+
+/**
  * Pure-Kotlin (JVM-only, no Android imports) framing codec so it can be unit
  * tested on the host. A frame that fails any check decodes to null — a
  * corrupt mesh frame is never handed to upper layers.

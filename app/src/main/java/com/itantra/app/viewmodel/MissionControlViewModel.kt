@@ -385,8 +385,13 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
     /** Rebuilds the per-language translate list from on-disk state + hub catalogue. */
     fun refreshTranslatePacks() {
         viewModelScope.launch {
-            val nmtEntries = ModelCatalogue.fetchRemoteNmtCatalogue()
-            if (nmtEntries.isNotEmpty()) _nmtCatalogue.value = nmtEntries
+            // Catalogue is cached for the session: fetching it per call turns
+            // every 200ms progress tick into a HuggingFace request storm that
+            // competes with the model download itself.
+            if (_nmtCatalogue.value.isEmpty()) {
+                val nmtEntries = ModelCatalogue.fetchRemoteNmtCatalogue()
+                if (nmtEntries.isNotEmpty()) _nmtCatalogue.value = nmtEntries
+            }
             translationEngine.mlKitDownloadedIsos { downloaded ->
                 val rows = SupportedLanguage.values().map { lang ->
                     val iso = lang.code
@@ -448,13 +453,55 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
     private var nmtProgressSyncStarted = false
 
-    /** Single collector mirroring hub progress into the translate rows. */
+    /**
+     * Single collector mirroring hub progress into the translate rows.
+     * Progress ticks (every 200ms) only patch the affected rows in place;
+     * the heavyweight [refreshTranslatePacks] (ML Kit query + disk checks)
+     * runs only when an NMT download reaches a terminal state.
+     */
     private fun startNmtProgressSync() {
         if (nmtProgressSyncStarted) return
         nmtProgressSyncStarted = true
         viewModelScope.launch {
-            modelDownloadManager.states.collect { refreshTranslatePacks() }
+            var terminalHandled = emptySet<String>()
+            modelDownloadManager.states.collect { states ->
+                syncNmtRowProgress(states)
+                val terminal = states
+                    .filterKeys { it.startsWith("nmt-") }
+                    .filterValues {
+                        it is ModelDownloadState.Installed ||
+                            it is ModelDownloadState.Error ||
+                            it is ModelDownloadState.Cancelled
+                    }
+                    .keys
+                val fresh = terminal - terminalHandled
+                if (fresh.isNotEmpty()) refreshTranslatePacks()
+                terminalHandled = terminal
+            }
         }
+    }
+
+    /** Patches only progress fields of OPUS rows from live hub states. */
+    private fun syncNmtRowProgress(states: Map<String, ModelDownloadState>) {
+        val current = _translatePacks.value
+        if (current.isEmpty()) return
+        var changed = false
+        val updated = current.map { row ->
+            val state = states[nmtTagFor(row.iso)]
+            val downloading = state is ModelDownloadState.Downloading
+            val progress = when (state) {
+                is ModelDownloadState.Downloading -> state.progress
+                is ModelDownloadState.Paused -> state.progress
+                else -> null
+            }
+            if (row.downloading == downloading && row.downloadProgress == progress) {
+                row
+            } else {
+                changed = true
+                row.copy(downloading = downloading, downloadProgress = progress)
+            }
+        }
+        if (changed) _translatePacks.value = updated
     }
 
     /**
@@ -571,6 +618,17 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
                 }
             }
         }
+
+        // mlKitReadyIsos is otherwise only filled from Settings: a cold start
+        // straight into SOS/Rescue false-reports installed packs as missing,
+        // and that false "not ready" is broadcast to peers who cache it all
+        // session. Warm it, then re-evaluate + re-broadcast to un-stick peers.
+        viewModelScope.launch {
+            translationEngine.mlKitDownloadedIsos {
+                checkCrossLingualStatus()
+                broadcastTranslationCapability()
+            }
+        }
     }
 
     fun downloadTranslationModel() {
@@ -658,7 +716,10 @@ class MissionControlViewModel(application: Application) : AndroidViewModel(appli
 
             // English users are NEVER blocked in either direction
             val outWorks = localIsEnglish || translationEngine.myPackReady(localLang)
-            val inWorks = peerIsEnglish || (peerTranslatorAvailable[peerNodeId] == true)
+            // Peer capability arrives in a packet broadcast on link-up; until
+            // it lands we have no evidence — only an explicit "not ready"
+            // blocks, never an unknown peer.
+            val inWorks = peerIsEnglish || (peerTranslatorAvailable[peerNodeId] != false)
 
             if (!outWorks || !inWorks) {
                 _isCrossLingualBlocked.value = true

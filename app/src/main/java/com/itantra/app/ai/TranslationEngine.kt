@@ -462,7 +462,11 @@ class TranslationEngine(
                         }
                     }
                     if (found.isNotEmpty()) found.add("en")
-                    mlKitReadyIsos = found.toSet()
+                    // An empty read must not wipe the cache: ML Kit transiently
+                    // reports no models (store reindex, pack op in flight), and
+                    // deletion already subtracts via deleteMlKitLanguage — so an
+                    // empty result carries no trustworthy signal.
+                    if (found.isNotEmpty()) mlKitReadyIsos = found.toSet()
                     callback(found)
                 }
                 .addOnFailureListener { callback(emptySet()) }

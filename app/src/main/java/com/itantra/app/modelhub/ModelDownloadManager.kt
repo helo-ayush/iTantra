@@ -76,8 +76,9 @@ data class LanguageModelPack(
  * partial `.part` file for a later HTTP-Range resume), resumed, or cancelled
  * (deleting the partial file and any half-extracted destination directory).
  *
- * All blocking work runs on [Dispatchers.IO]; state updates are posted back
- * to the main dispatcher.
+ * All blocking work runs on [Dispatchers.IO]. State is published straight
+ * from the IO thread — [MutableStateFlow] is thread-safe, and hopping to the
+ * main dispatcher here would let a busy UI thread throttle the copy loop.
  */
 class ModelDownloadManager(
     private val context: Context,
@@ -261,7 +262,7 @@ class ModelDownloadManager(
 
             // --- Phase 2: verify the archive against the catalogue SHA-256 --
             throwIfNotRunning(entry)
-            updateStateOnMain(tag) { ModelDownloadState.Verifying }
+            publishState(tag) { ModelDownloadState.Verifying }
             val actualSha256 = sha256Of(tempFile, entry)
             if (!actualSha256.equals(language.sha256, ignoreCase = true)) {
                 tempFile.delete()
@@ -270,7 +271,7 @@ class ModelDownloadManager(
 
             // --- Phase 3: extract into filesDir/models/{languageTag} --------
             throwIfNotRunning(entry)
-            updateStateOnMain(tag) { ModelDownloadState.Extracting }
+            publishState(tag) { ModelDownloadState.Extracting }
             extractZip(tempFile, destDir, entry)
             tempFile.delete()
             return ModelDownloadState.Installed
@@ -320,7 +321,7 @@ class ModelDownloadManager(
                     // full file, so skip straight to verification.
                     entry.progressBytes = existingLen
                     entry.totalBytes = existingLen
-                    updateStateOnMain(tag) {
+                    publishState(tag) {
                         ModelDownloadState.Downloading(existingLen, existingLen)
                     }
                 }
@@ -370,14 +371,14 @@ class ModelDownloadManager(
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastUpdateAt >= PROGRESS_UPDATE_INTERVAL_MS) {
                         lastUpdateAt = now
-                        updateStateOnMain(tag) { ModelDownloadState.Downloading(readBytes, totalBytes) }
+                        publishState(tag) { ModelDownloadState.Downloading(readBytes, totalBytes) }
                     }
                 }
             }
         }
         entry.progressBytes = readBytes
         entry.totalBytes = totalBytes
-        updateStateOnMain(tag) { ModelDownloadState.Downloading(readBytes, totalBytes) }
+        publishState(tag) { ModelDownloadState.Downloading(readBytes, totalBytes) }
     }
 
     /** Parses the total byte count from a `Content-Range: bytes start-end/total` header. */
@@ -399,11 +400,9 @@ class ModelDownloadManager(
         }
     }
 
-    /** Hops to the main dispatcher to publish a state transition. */
-    private suspend fun updateStateOnMain(tag: String, state: () -> ModelDownloadState) {
-        withContext(Dispatchers.Main.immediate) {
-            _states.update { it + (tag to state()) }
-        }
+    /** Publishes a state transition; safe to call from any thread. */
+    private fun publishState(tag: String, state: () -> ModelDownloadState) {
+        _states.update { it + (tag to state()) }
     }
 
     private fun sha256Of(file: File, entry: ActiveDownload): String {
